@@ -1,15 +1,33 @@
 package main
 
 import (
+	"errors"
+
 	"github.com/conductorone/baton-sdk/pkg/field"
+	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/spf13/viper"
 )
 
 var (
+	ApiKeyField = field.StringField(
+		"workato-api-key",
+		field.WithRequired(true),
+		field.WithDescription("Your workato API key"),
+	)
+
+	WorkatoDataCenterFiekd = field.StringField(
+		"workato-data-center",
+		field.WithDescription("Your workato data center (us, eu, jp, sg, au) default is 'us' see more on https://docs.workato.com/workato-api.html#base-url"),
+		field.WithDefaultValue("us"),
+	)
+
 	// ConfigurationFields defines the external configuration required for the
 	// connector to run. Note: these fields can be marked as optional or
 	// required.
-	ConfigurationFields = []field.SchemaField{}
+	ConfigurationFields = []field.SchemaField{
+		ApiKeyField,
+		WorkatoDataCenterFiekd,
+	}
 
 	// FieldRelationships defines relationships between the fields listed in
 	// ConfigurationFields that can be automatically validated. For example, a
@@ -23,5 +41,9 @@ var (
 // needs to perform extra validations that cannot be encoded with configuration
 // parameters.
 func ValidateConfig(v *viper.Viper) error {
+	if _, ok := client.WorkatoDataCenters[v.GetString(WorkatoDataCenterFiekd.FieldName)]; !ok {
+		return errors.New("invalid workato data center")
+	}
+
 	return nil
 }
