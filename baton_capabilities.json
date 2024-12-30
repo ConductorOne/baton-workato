@@ -1,21 +1,60 @@
 {
-  "@type": "type.googleapis.com/c1.connector.v2.ConnectorCapabilities",
-  "resourceTypeCapabilities": [
+  "@type":  "type.googleapis.com/c1.connector.v2.ConnectorCapabilities",
+  "resourceTypeCapabilities":  [
     {
-      "resourceType": {
-        "id": "user",
-        "displayName": "User",
-        "traits": [
+      "resourceType":  {
+        "id":  "collaborator",
+        "displayName":  "Collaborator",
+        "traits":  [
           "TRAIT_USER"
         ]
       },
-      "capabilities": [
+      "capabilities":  [
+        "CAPABILITY_SYNC"
+      ]
+    },
+    {
+      "resourceType":  {
+        "id":  "folder",
+        "displayName":  "Folder"
+      },
+      "capabilities":  [
+        "CAPABILITY_SYNC"
+      ]
+    },
+    {
+      "resourceType":  {
+        "id":  "privilege",
+        "displayName":  "Privilege"
+      },
+      "capabilities":  [
+        "CAPABILITY_SYNC"
+      ]
+    },
+    {
+      "resourceType":  {
+        "id":  "project",
+        "displayName":  "Project"
+      },
+      "capabilities":  [
+        "CAPABILITY_SYNC"
+      ]
+    },
+    {
+      "resourceType":  {
+        "id":  "role",
+        "displayName":  "Roles",
+        "traits":  [
+          "TRAIT_ROLE"
+        ]
+      },
+      "capabilities":  [
         "CAPABILITY_SYNC"
       ]
     }
   ],
-  "connectorCapabilities": [
+  "connectorCapabilities":  [
     "CAPABILITY_SYNC"
   ],
-  "credentialDetails": {}
+  "credentialDetails":  {}
 }
