@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
@@ -22,7 +23,31 @@ func (o *folderBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 // List returns all the users from the database as resource objects.
 // Users include a UserTrait because they are the 'shape' of a standard user.
 func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
-	folders, nextToken, err := o.client.GetFolders(ctx, nil, pToken)
+	var bag pagination.Bag
+
+	var parentId *int
+	var token string
+
+	if pToken.Token != "" {
+		err := bag.Unmarshal(pToken.Token)
+		if err != nil {
+			return nil, "", nil, err
+		}
+
+		state := bag.Pop()
+
+		parentIdInt, err := strconv.Atoi(state.ResourceID)
+		if err != nil {
+			return nil, "", nil, err
+		}
+
+		// Parent Folder ID
+		parentId = &parentIdInt
+		// Page Number
+		token = state.Token
+	}
+
+	folders, nextToken, err := o.client.GetFolders(ctx, parentId, token)
 	if err != nil {
 		return nil, "", nil, err
 	}
@@ -35,13 +60,20 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 			return nil, "", nil, err
 		}
 		rv[i] = us
+
+		bag.Push(pagination.PageState{
+			Token:          nextToken,
+			ResourceTypeID: folderResourceType.Id,
+			ResourceID:     us.Id.Resource,
+		})
 	}
 
-	if len(folders) == 0 {
-		nextToken = ""
+	marshal, err := bag.Marshal()
+	if err != nil {
+		return nil, "", nil, err
 	}
 
-	return rv, nextToken, nil, nil
+	return rv, marshal, nil, nil
 }
 
 // Entitlements always returns an empty slice for users.

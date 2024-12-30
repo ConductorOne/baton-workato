@@ -3,18 +3,17 @@ package client
 import (
 	"context"
 	"fmt"
-	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"net/http"
 	"strconv"
 )
 
-func (c *WorkatoClient) GetFolders(ctx context.Context, parentId *int, pToken *pagination.Token) ([]Folder, string, error) {
+func (c *WorkatoClient) GetFolders(ctx context.Context, parentId *int, pToken string) ([]Folder, string, error) {
 	var response []Folder
 	var err error
 
 	page := 0
-	if pToken.Token != "" {
-		page, err = strconv.Atoi(pToken.Token)
+	if pToken != "" {
+		page, err = strconv.Atoi(pToken)
 		if err != nil {
 			return nil, "", ErrInvalidPaginationToken
 		}
