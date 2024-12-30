@@ -14,5 +14,20 @@ var collaboratorResourceType = &v2.ResourceType{
 var privilegeResourceType = &v2.ResourceType{
 	Id:          "privilege",
 	DisplayName: "Privilege",
+}
+
+var roleResourceType = &v2.ResourceType{
+	Id:          "role",
+	DisplayName: "Roles",
 	Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_ROLE},
+}
+
+var folderResourceType = &v2.ResourceType{
+	Id:          "folder",
+	DisplayName: "Folder",
+}
+
+var projectResourceType = &v2.ResourceType{
+	Id:          "project",
+	DisplayName: "Project",
 }

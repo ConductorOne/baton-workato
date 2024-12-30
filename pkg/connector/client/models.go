@@ -37,3 +37,28 @@ type CollaboratorDetails struct {
 	Privileges      map[string][]string `json:"privileges"`
 	FolderIds       []int               `json:"folder_ids"`
 }
+
+type Role struct {
+	Id          int                 `json:"id"`
+	Name        string              `json:"name"`
+	Inheritable bool                `json:"inheritable"`
+	FolderIds   []int               `json:"folder_ids"`
+	CreatedAt   time.Time           `json:"created_at"`
+	UpdatedAt   time.Time           `json:"updated_at"`
+	Privileges  map[string][]string `json:"privileges"`
+}
+
+type Folder struct {
+	Id        int       `json:"id"`
+	Name      string    `json:"name"`
+	ParentId  int       `json:"parent_id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type Project struct {
+	Id          int    `json:"id"`
+	Description string `json:"description"`
+	FolderId    int    `json:"folder_id"`
+	Name        string `json:"name"`
+}

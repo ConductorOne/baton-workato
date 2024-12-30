@@ -17,12 +17,15 @@ var (
 var (
 	GetCollaboratorsPath    = "api/members"
 	GetCollaboratorByIdPath = "api/members/%d/privileges"
+	GetRolesPaths           = "api/roles"
+	GetFoldersPaths         = "api/folders"
 )
 
 type WorkatoClient struct {
 	apiKey     string
 	baseUrl    *url.URL
 	httpClient *uhttp.BaseHttpClient
+	pageLimit  int
 }
 
 func NewWorkatoClient(ctx context.Context, apiKey, baseUrl string) (*WorkatoClient, error) {
@@ -49,5 +52,6 @@ func NewWorkatoClient(ctx context.Context, apiKey, baseUrl string) (*WorkatoClie
 		httpClient: uhtppClient,
 		baseUrl:    parseBaseUrl,
 		apiKey:     apiKey,
+		pageLimit:  500,
 	}, nil
 }
