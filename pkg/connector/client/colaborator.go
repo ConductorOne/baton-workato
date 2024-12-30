@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 )
 
@@ -14,4 +15,21 @@ func (c *WorkatoClient) GetCollaborators(ctx context.Context) ([]Collaborator, e
 	}
 
 	return response.Data, nil
+}
+
+func (c *WorkatoClient) GetCollaboratorById(ctx context.Context, id int) (*CollaboratorDetails, error) {
+	var response CommonPagination[CollaboratorDetails]
+
+	pathString := fmt.Sprintf(GetCollaboratorByIdPath, id)
+
+	err := c.doRequest(ctx, http.MethodGet, c.getPath(pathString), &response, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(response.Data) != 1 {
+		return nil, fmt.Errorf("baton-workato: expected 1 collaborator, got %d", len(response.Data))
+	}
+
+	return &response.Data[0], nil
 }

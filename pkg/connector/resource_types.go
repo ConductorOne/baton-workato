@@ -10,3 +10,9 @@ var collaboratorResourceType = &v2.ResourceType{
 	DisplayName: "Collaborator",
 	Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
 }
+
+var privilegeResourceType = &v2.ResourceType{
+	Id:          "privilege",
+	DisplayName: "Privilege",
+	Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_ROLE},
+}

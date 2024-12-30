@@ -30,3 +30,10 @@ type Collaborator struct {
 	TimeZone   string    `json:"time_zone"`
 	CreatedAt  time.Time `json:"created_at"`
 }
+
+type CollaboratorDetails struct {
+	EnvironmentType string              `json:"environment_type"`
+	Name            string              `json:"name"`
+	Privileges      map[string][]string `json:"privileges"`
+	FolderIds       []int               `json:"folder_ids"`
+}

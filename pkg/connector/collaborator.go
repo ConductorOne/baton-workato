@@ -50,7 +50,7 @@ func (o *collaboratorBuilder) Grants(ctx context.Context, resource *v2.Resource,
 	return nil, "", nil, nil
 }
 
-func newUserBuilder(client *client.WorkatoClient) *collaboratorBuilder {
+func newCollaboratorBuilder(client *client.WorkatoClient) *collaboratorBuilder {
 	return &collaboratorBuilder{
 		client: client,
 	}

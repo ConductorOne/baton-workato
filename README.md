@@ -1,12 +1,24 @@
 ![Baton Logo](./baton-logo.png)
 
-# `baton-workato` [![Go Reference](https://pkg.go.dev/badge/github.com/conductorone/baton-workato.svg)](https://pkg.go.dev/github.com/conductorone/baton-workato) ![main ci](https://github.com/conductorone/baton-workato/actions/workflows/main.yaml/badge.svg)
+#
+
+`baton-workato` [![Go Reference](https://pkg.go.dev/badge/github.com/conductorone/baton-workato.svg)](https://pkg.go.dev/github.com/conductorone/baton-workato) ![main ci](https://github.com/conductorone/baton-workato/actions/workflows/main.yaml/badge.svg)
 
 `baton-workato` is a connector for built using the [Baton SDK](https://github.com/conductorone/baton-sdk).
 
 Check out [Baton](https://github.com/conductorone/baton) to learn more the project in general.
 
 # Getting Started
+
+## Prerequisites
+
+You need to pass the workato-api-key:
+
+1. Create an Workato Account.
+2. Create an API KEY https://app.workato.com/members/api/clients.
+3. Run it.
+
+Obs: if you have a basic account, you can ignore the subusers using ```.
 
 ## brew
 
@@ -37,6 +49,7 @@ baton resources
 # Data Model
 
 `baton-workato` will pull down information about the following resources:
+
 - Users
 
 # Contributing, Support and Issues
@@ -69,9 +82,10 @@ Flags:
   -h, --help                         help for baton-workato
       --log-format string            The output format for logs: json, console ($BATON_LOG_FORMAT) (default "json")
       --log-level string             The log level: debug, info, warn, error ($BATON_LOG_LEVEL) (default "info")
-  -p, --provisioning                 If this connector supports provisioning, this must be set in order for provisioning actions to be enabled ($BATON_PROVISIONING)
+  -p, --provisioning                 This must be set in order for provisioning actions to be enabled ($BATON_PROVISIONING)
+      --skip-full-sync               This must be set to skip a full sync ($BATON_SKIP_FULL_SYNC)
       --ticketing                    This must be set to enable ticketing support ($BATON_TICKETING)
   -v, --version                      version for baton-workato
-
-Use "baton-workato [command] --help" for more information about a command.
+      --workato-api-key string       required: Your workato API key ($BATON_WORKATO_API_KEY)
+      --workato-data-center string   Your workato data center (us, eu, jp, sg, au) default is 'us' see more on https://docs.workato.com/workato-api.html#base-url ($BATON_WORKATO_DATA_CENTER) (default "us")
 ```
