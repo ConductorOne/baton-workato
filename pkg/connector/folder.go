@@ -36,13 +36,16 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 
 		state := bag.Pop()
 
-		parentIdInt, err := strconv.Atoi(state.ResourceID)
-		if err != nil {
-			return nil, "", nil, err
+		if state.ResourceID != "" {
+			parentIdInt, err := strconv.Atoi(state.ResourceID)
+			if err != nil {
+				return nil, "", nil, err
+			}
+
+			// Parent Folder ID
+			parentId = &parentIdInt
 		}
 
-		// Parent Folder ID
-		parentId = &parentIdInt
 		// Page Number
 		token = state.Token
 	}
@@ -62,9 +65,24 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 		rv[i] = us
 
 		bag.Push(pagination.PageState{
-			Token:          nextToken,
+			Token:          "",
 			ResourceTypeID: folderResourceType.Id,
 			ResourceID:     us.Id.Resource,
+		})
+	}
+
+	if len(folders) != 0 {
+
+		nextStateId := ""
+
+		if parentId != nil {
+			nextStateId = strconv.Itoa(*parentId)
+		}
+
+		bag.Push(pagination.PageState{
+			Token:          nextToken,
+			ResourceTypeID: folderResourceType.Id,
+			ResourceID:     nextStateId,
 		})
 	}
 
