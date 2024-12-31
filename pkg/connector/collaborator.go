@@ -69,7 +69,7 @@ func collaboratorResource(collaborator *client.Collaborator) (*v2.Resource, erro
 		"timeZone":   collaborator.TimeZone,
 	}
 
-	userTraits := []resource.UserTraitOption{
+	traits := []resource.UserTraitOption{
 		resource.WithUserProfile(profile),
 		resource.WithStatus(userStatus),
 		resource.WithEmail(collaborator.Email, true),
@@ -80,7 +80,7 @@ func collaboratorResource(collaborator *client.Collaborator) (*v2.Resource, erro
 		collaborator.Name,
 		collaboratorResourceType,
 		collaborator.Id,
-		userTraits,
+		traits,
 	)
 	if err != nil {
 		return nil, err

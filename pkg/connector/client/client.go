@@ -17,8 +17,9 @@ var (
 var (
 	GetCollaboratorsPath    = "api/members"
 	GetCollaboratorByIdPath = "api/members/%d/privileges"
-	GetRolesPaths           = "api/roles"
-	GetFoldersPaths         = "api/folders"
+	GetRolesPath            = "api/roles"
+	GetProjectsPath         = "api/projects"
+	GetFoldersPath          = "api/folders"
 )
 
 type WorkatoClient struct {

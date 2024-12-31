@@ -22,7 +22,7 @@ func (o *projectBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 // List returns all the users from the database as resource objects.
 // Users include a UserTrait because they are the 'shape' of a standard user.
 func (o *projectBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
-	projects, nextToken, err := o.client.GetProjects(ctx, pToken)
+	projects, nextToken, err := o.client.GetProjects(ctx, pToken.Token)
 	if err != nil {
 		return nil, "", nil, err
 	}
@@ -68,7 +68,7 @@ func projectResource(project *client.Project) (*v2.Resource, error) {
 		"folder_id":   project.FolderId,
 	}
 
-	userTraits := []resource.AppTraitOption{
+	traits := []resource.AppTraitOption{
 		resource.WithAppProfile(profile),
 	}
 
@@ -76,7 +76,7 @@ func projectResource(project *client.Project) (*v2.Resource, error) {
 		project.Name,
 		projectResourceType,
 		project.Id,
-		userTraits,
+		traits,
 	)
 	if err != nil {
 		return nil, err

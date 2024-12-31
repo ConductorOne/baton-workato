@@ -3,24 +3,23 @@ package client
 import (
 	"context"
 	"fmt"
-	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"net/http"
 	"strconv"
 )
 
-func (c *WorkatoClient) GetProjects(ctx context.Context, pToken *pagination.Token) ([]Project, string, error) {
+func (c *WorkatoClient) GetProjects(ctx context.Context, pToken string) ([]Project, string, error) {
 	var response []Project
 	var err error
 
 	page := 0
-	if pToken.Token != "" {
-		page, err = strconv.Atoi(pToken.Token)
+	if pToken != "" {
+		page, err = strconv.Atoi(pToken)
 		if err != nil {
 			return nil, "", ErrInvalidPaginationToken
 		}
 	}
 
-	uri := c.getPath(GetRolesPaths)
+	uri := c.getPath(GetProjectsPath)
 
 	query := uri.Query()
 	query.Add("per_page", fmt.Sprintf("%d", c.pageLimit))

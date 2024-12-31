@@ -22,7 +22,7 @@ const (
 
 type privilegeBuilder struct {
 	client *client.WorkatoClient
-	cache  *privilegeCache
+	cache  *collaboratorCache
 }
 
 func (o *privilegeBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
@@ -63,7 +63,7 @@ func (o *privilegeBuilder) Entitlements(_ context.Context, resource *v2.Resource
 	assigmentOptions := []entitlement.EntitlementOption{
 		entitlement.WithGrantableTo(collaboratorResourceType),
 		entitlement.WithDescription(fmt.Sprintf("Assigned %s to scopes", collaboratorResourceType.DisplayName)),
-		entitlement.WithDisplayName(fmt.Sprintf("%s privilege %s", collaboratorResourceType.DisplayName, resource.DisplayName)),
+		entitlement.WithDisplayName(fmt.Sprintf("%s have %s`", collaboratorResourceType.DisplayName, resource.DisplayName)),
 	}
 	rv = append(rv, entitlement.NewAssignmentEntitlement(resource, assignedEntitlement, assigmentOptions...))
 
@@ -74,7 +74,7 @@ func (o *privilegeBuilder) Entitlements(_ context.Context, resource *v2.Resource
 func (o *privilegeBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
 	privilegeId := resource.Id.Resource
 
-	users := o.cache.getUsers(privilegeId)
+	users := o.cache.getUsersByPrivilege(privilegeId)
 
 	var rv []*v2.Grant
 
@@ -106,7 +106,7 @@ func privilegeResource(privilege *workato.CompoundPrivilege) (*v2.Resource, erro
 		"description": privilege.Privilege.Description,
 	}
 
-	userTraits := []rs.RoleTraitOption{
+	traits := []rs.RoleTraitOption{
 		rs.WithRoleProfile(profile),
 	}
 
@@ -114,7 +114,7 @@ func privilegeResource(privilege *workato.CompoundPrivilege) (*v2.Resource, erro
 		privilege.Resource+"-"+privilege.Privilege.Id,
 		privilegeResourceType,
 		privilege.Id(),
-		userTraits,
+		traits,
 	)
 	if err != nil {
 		return nil, err

@@ -69,7 +69,7 @@ func roleResource(role *client.Role) (*v2.Resource, error) {
 		"updated_at":  role.UpdatedAt.String(),
 	}
 
-	userTraits := []resource.RoleTraitOption{
+	traits := []resource.RoleTraitOption{
 		resource.WithRoleProfile(profile),
 	}
 
@@ -77,7 +77,7 @@ func roleResource(role *client.Role) (*v2.Resource, error) {
 		role.Name,
 		roleResourceType,
 		role.Id,
-		userTraits,
+		traits,
 	)
 	if err != nil {
 		return nil, err

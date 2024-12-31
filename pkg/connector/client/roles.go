@@ -20,7 +20,7 @@ func (c *WorkatoClient) GetRoles(ctx context.Context, pToken *pagination.Token) 
 		}
 	}
 
-	uri := c.getPath(GetRolesPaths)
+	uri := c.getPath(GetRolesPath)
 
 	query := uri.Query()
 	query.Add("per_page", fmt.Sprintf("%d", c.pageLimit))

@@ -19,7 +19,7 @@ func (c *WorkatoClient) GetFolders(ctx context.Context, parentId *int, pToken st
 		}
 	}
 
-	uri := c.getPath(GetFoldersPaths)
+	uri := c.getPath(GetFoldersPath)
 
 	query := uri.Query()
 	query.Add("per_page", fmt.Sprintf("%d", c.pageLimit))
