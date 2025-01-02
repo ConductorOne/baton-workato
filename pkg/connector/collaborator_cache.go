@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
@@ -63,7 +64,7 @@ func (p *collaboratorCache) buildCache(ctx context.Context) error {
 		}
 
 		// Build for folders
-		for _, folderId := range collaboratorDetails.FolderIds {
+		for _, folderId := range collaboratorDetails.FolderIDs {
 			p.folderToUser[folderId] = append(p.folderToUser[folderId], compoundUser)
 		}
 
@@ -78,7 +79,8 @@ func (p *collaboratorCache) buildCache(ctx context.Context) error {
 	return nil
 }
 
-func (p *collaboratorCache) getAllFoldersRecur(ctx context.Context, parentId *int, pToken string) ([]client.Folder, error) {
+// GetAllFoldersRecur is a recursive function that gets all folders in a Workato instance.
+func (p *collaboratorCache) GetAllFoldersRecur(ctx context.Context, parentId *int, pToken string) ([]client.Folder, error) {
 	l := ctxzap.Extract(ctx)
 
 	l.Info("Building cache for folders")
@@ -93,7 +95,7 @@ func (p *collaboratorCache) getAllFoldersRecur(ctx context.Context, parentId *in
 	if len(folders) == 0 {
 		return folders, nil
 	} else {
-		recurResult, err := p.getAllFoldersRecur(ctx, parentId, nextToken)
+		recurResult, err := p.GetAllFoldersRecur(ctx, parentId, nextToken)
 		if err != nil {
 			return nil, err
 		}
@@ -102,7 +104,7 @@ func (p *collaboratorCache) getAllFoldersRecur(ctx context.Context, parentId *in
 	}
 
 	for _, folder := range folders {
-		recurResult, err := p.getAllFoldersRecur(ctx, &folder.Id, "0")
+		recurResult, err := p.GetAllFoldersRecur(ctx, &folder.Id, "0")
 		if err != nil {
 			return nil, err
 		}

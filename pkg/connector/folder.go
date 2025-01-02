@@ -3,12 +3,13 @@ package connector
 import (
 	"context"
 	"fmt"
+	"strconv"
+
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	"github.com/conductorone/baton-workato/pkg/connector/cpagination"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
-	"strconv"
 
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 
@@ -164,18 +165,17 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 
 // Entitlements always returns an empty slice for users.
 func (o *folderBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
-
 	var rv []*v2.Entitlement
 	assigmentOptions := []entitlement.EntitlementOption{
 		entitlement.WithGrantableTo(roleResourceType),
-		entitlement.WithDescription(fmt.Sprintf("Role can acess the folder")),
+		entitlement.WithDescription(fmt.Sprintf("%s can acess %s", roleResourceType.DisplayName, resource.DisplayName)),
 		entitlement.WithDisplayName(fmt.Sprintf("%s acess %s", roleResourceType.DisplayName, resource.DisplayName)),
 	}
 	rv = append(rv, entitlement.NewPermissionEntitlement(resource, roleAccessEntitlement, assigmentOptions...))
 
 	assigmentOptions = []entitlement.EntitlementOption{
 		entitlement.WithGrantableTo(collaboratorResourceType),
-		entitlement.WithDescription(fmt.Sprintf("Collaborator can acess the folder")),
+		entitlement.WithDescription(fmt.Sprintf("%s can acess %s", collaboratorResourceType.DisplayName, resource.DisplayName)),
 		entitlement.WithDisplayName(fmt.Sprintf("%s acess %s", collaboratorResourceType.DisplayName, resource.DisplayName)),
 	}
 	rv = append(rv, entitlement.NewPermissionEntitlement(resource, collaboratorAccessEntitlement, assigmentOptions...))

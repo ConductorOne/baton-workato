@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 )
@@ -38,8 +39,9 @@ func (p *roleCache) buildCache(ctx context.Context) error {
 		}
 
 		for _, role := range roles {
-			for _, folderID := range role.FolderIds {
-				p.folderToRole[folderID] = append(p.folderToRole[folderID], &role)
+			for _, folderID := range role.FolderIDs {
+				copyRole := role
+				p.folderToRole[folderID] = append(p.folderToRole[folderID], &copyRole)
 			}
 		}
 

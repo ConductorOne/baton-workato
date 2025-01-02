@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"fmt"
+
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"

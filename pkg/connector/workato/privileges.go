@@ -446,7 +446,6 @@ func FindRelatedPrivileges(param map[string][]string) []CompoundPrivilege {
 	for key, values := range param {
 		if reference, ok := Privileges[key]; ok {
 			for _, value := range values {
-
 				// Since it's a small list, we can use a linear search¬¬¬¬
 				index := slices.IndexFunc(reference, func(c Privilege) bool {
 					return c.Id == value

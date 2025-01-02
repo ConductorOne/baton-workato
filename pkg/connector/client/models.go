@@ -35,14 +35,14 @@ type CollaboratorDetails struct {
 	EnvironmentType string              `json:"environment_type"`
 	Name            string              `json:"name"`
 	Privileges      map[string][]string `json:"privileges"`
-	FolderIds       []int               `json:"folder_ids"`
+	FolderIDs       []int               `json:"folder_ids"`
 }
 
 type Role struct {
 	Id          int                 `json:"id"`
 	Name        string              `json:"name"`
 	Inheritable bool                `json:"inheritable"`
-	FolderIds   []int               `json:"folder_ids"`
+	FolderIDs   []int               `json:"folder_ids"`
 	CreatedAt   time.Time           `json:"created_at"`
 	UpdatedAt   time.Time           `json:"updated_at"`
 	Privileges  map[string][]string `json:"privileges"`

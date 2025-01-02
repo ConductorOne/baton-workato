@@ -3,6 +3,7 @@ package cpagination
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 )
 

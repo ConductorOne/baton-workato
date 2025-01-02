@@ -3,6 +3,8 @@ package cpagination
 import (
 	"testing"
 
+	"github.com/conductorone/baton-sdk/pkg/pagination"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,7 +43,7 @@ func TestGenBagFromToken(t *testing.T) {
 	marshalled, err := bag.Marshal()
 	require.NoError(t, err)
 
-	token := Token{Token: marshalled}
+	token := pagination.Token{Token: marshalled}
 
 	// Unmarshal
 	bagFromToken, err := GenBagFromToken[innerStruct](token)
