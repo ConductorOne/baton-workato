@@ -31,5 +31,5 @@ func (c *WorkatoClient) GetProjects(ctx context.Context, pToken string) ([]Proje
 		return nil, "", err
 	}
 
-	return response, fmt.Sprintf("%d", page+1), nil
+	return response, nextToken(response, page), nil
 }

@@ -52,10 +52,6 @@ func (o *roleBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId,
 		rv[i] = us
 	}
 
-	if len(roles) == 0 {
-		nextToken = ""
-	}
-
 	return rv, nextToken, nil, nil
 }
 

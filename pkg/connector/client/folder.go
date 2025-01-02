@@ -36,5 +36,5 @@ func (c *WorkatoClient) GetFolders(ctx context.Context, parentId *int, pToken st
 		return nil, "", err
 	}
 
-	return response, fmt.Sprintf("%d", page+1), nil
+	return response, nextToken(response, page), nil
 }

@@ -102,3 +102,13 @@ func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress
 
 	return nil
 }
+
+func nextToken[T any](response []T, page int) string {
+	token := ""
+
+	if len(response) != 0 {
+		token = fmt.Sprintf("%d", page+1)
+	}
+
+	return token
+}

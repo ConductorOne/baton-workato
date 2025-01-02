@@ -78,7 +78,7 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 			return nil, "", nil, err
 		}
 
-		if len(projects) != 0 {
+		if nextToken != "" {
 			bag.Push(pagination.PageState{
 				Token:          nextToken,
 				ResourceTypeID: projectResourceType.Id,
@@ -139,7 +139,7 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 			})
 		}
 
-		if len(folders) != 0 {
+		if nextToken != "" {
 			nextStateId := ""
 
 			if parentId != nil {
@@ -171,14 +171,14 @@ func (o *folderBuilder) Entitlements(_ context.Context, resource *v2.Resource, _
 		entitlement.WithDescription(fmt.Sprintf("Role can acess the folder")),
 		entitlement.WithDisplayName(fmt.Sprintf("%s acess %s", roleResourceType.DisplayName, resource.DisplayName)),
 	}
-	rv = append(rv, entitlement.NewAssignmentEntitlement(resource, roleAccessEntitlement, assigmentOptions...))
+	rv = append(rv, entitlement.NewPermissionEntitlement(resource, roleAccessEntitlement, assigmentOptions...))
 
 	assigmentOptions = []entitlement.EntitlementOption{
 		entitlement.WithGrantableTo(collaboratorResourceType),
 		entitlement.WithDescription(fmt.Sprintf("Collaborator can acess the folder")),
 		entitlement.WithDisplayName(fmt.Sprintf("%s acess %s", collaboratorResourceType.DisplayName, resource.DisplayName)),
 	}
-	rv = append(rv, entitlement.NewAssignmentEntitlement(resource, collaboratorAccessEntitlement, assigmentOptions...))
+	rv = append(rv, entitlement.NewPermissionEntitlement(resource, collaboratorAccessEntitlement, assigmentOptions...))
 
 	return rv, "", nil, nil
 }

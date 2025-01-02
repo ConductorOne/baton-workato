@@ -2,7 +2,6 @@ package connector
 
 import (
 	"context"
-
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 
@@ -35,10 +34,6 @@ func (o *projectBuilder) List(ctx context.Context, parentResourceID *v2.Resource
 			return nil, "", nil, err
 		}
 		rv[i] = us
-	}
-
-	if len(projects) == 0 {
-		nextToken = ""
 	}
 
 	return rv, nextToken, nil, nil

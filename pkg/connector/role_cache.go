@@ -33,7 +33,7 @@ func (p *roleCache) buildCache(ctx context.Context) error {
 			return err
 		}
 
-		if len(roles) == 0 {
+		if nextToken == "" {
 			break
 		}
 
