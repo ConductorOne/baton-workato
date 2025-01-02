@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/conductorone/baton-workato/cmd/baton-workato/conf"
+
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 
 	"github.com/conductorone/baton-sdk/pkg/config"
@@ -27,7 +29,7 @@ func main() {
 		"baton-workato",
 		getConnector,
 		field.Configuration{
-			Fields: ConfigurationFields,
+			Fields: conf.ConfigurationFields,
 		},
 	)
 	if err != nil {
@@ -46,12 +48,12 @@ func main() {
 
 func getConnector(ctx context.Context, v *viper.Viper) (types.ConnectorServer, error) {
 	l := ctxzap.Extract(ctx)
-	if err := ValidateConfig(v); err != nil {
+	if err := conf.ValidateConfig(v); err != nil {
 		return nil, err
 	}
 
-	key := v.GetString(ApiKeyField.FieldName)
-	dataCenterUrl := client.WorkatoDataCenters[v.GetString(WorkatoDataCenterFiekd.FieldName)]
+	key := v.GetString(conf.ApiKeyField.FieldName)
+	dataCenterUrl := client.WorkatoDataCenters[v.GetString(conf.WorkatoDataCenterFiekd.FieldName)]
 
 	workatoClient, _ := client.NewWorkatoClient(ctx, key, dataCenterUrl)
 

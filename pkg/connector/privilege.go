@@ -85,7 +85,14 @@ func (o *privilegeBuilder) Grants(ctx context.Context, resource *v2.Resource, pT
 			return nil, "", nil, err
 		}
 
-		grantToCollaborator := grant.NewGrant(resource, assignedEntitlement, collaboratorId)
+		// Collaborator only have privileges if a role is assigned to them
+		// To update collaborator privileges, the role must be updated
+		grantToCollaborator := grant.NewGrant(
+			resource,
+			assignedEntitlement,
+			collaboratorId,
+			grant.WithAnnotation(&v2.GrantImmutable{}),
+		)
 
 		rv = append(rv, grantToCollaborator)
 	}

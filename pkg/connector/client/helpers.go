@@ -103,10 +103,10 @@ func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress
 	return nil
 }
 
-func nextToken[T any](response []T, page int) string {
+func nextToken[T any](c *WorkatoClient, response []T, page int) string {
 	token := ""
 
-	if len(response) != 0 {
+	if len(response) == c.pageLimit {
 		token = fmt.Sprintf("%d", page+1)
 	}
 

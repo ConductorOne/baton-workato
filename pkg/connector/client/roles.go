@@ -31,5 +31,5 @@ func (c *WorkatoClient) GetRoles(ctx context.Context, pToken string) ([]Role, st
 		return nil, "", err
 	}
 
-	return response, nextToken(response, page), nil
+	return response, nextToken(c, response, page), nil
 }

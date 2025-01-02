@@ -32,8 +32,8 @@ var (
 				Description: "View the Runtime user connections setting.",
 			},
 			Privilege{
-				Id:          "edit",
-				Description: "Edit the Runtime user connections setting.",
+				Id:          "update",
+				Description: "update the Runtime user connections setting.",
 			},
 			Privilege{
 				Id:          "delete",
@@ -86,7 +86,7 @@ var (
 		},
 		"People task": {
 			Privilege{
-				Id:          "All",
+				Id:          "all",
 				Description: "Access to the People task tool.",
 			},
 		},
@@ -440,13 +440,47 @@ func AllCompoundPrivileges() []CompoundPrivilege {
 	return all
 }
 
+func FindRelatedPrivilegesErr(param map[string][]string) ([]CompoundPrivilege, error) {
+	count := 0
+
+	for _, values := range param {
+		count += len(values)
+	}
+
+	reference := FindRelatedPrivileges(param)
+
+	if len(reference) != count {
+		for key, values := range param {
+			resource, ok := Privileges[key]
+
+			if !ok {
+				return nil, fmt.Errorf("invalid resource")
+			}
+
+			for _, value := range values {
+				index := slices.IndexFunc(resource, func(c Privilege) bool {
+					return c.Id == value
+				})
+
+				if index < 0 {
+					return nil, fmt.Errorf("privilege '%s-%s' not found", key, value)
+				}
+			}
+		}
+
+		return nil, fmt.Errorf("invalid privileges")
+	}
+
+	return reference, nil
+}
+
 func FindRelatedPrivileges(param map[string][]string) []CompoundPrivilege {
 	all := make([]CompoundPrivilege, 0)
 
 	for key, values := range param {
 		if reference, ok := Privileges[key]; ok {
 			for _, value := range values {
-				// Since it's a small list, we can use a linear search¬¬¬¬
+				// Since it's a small list, we can use a linear search
 				index := slices.IndexFunc(reference, func(c Privilege) bool {
 					return c.Id == value
 				})

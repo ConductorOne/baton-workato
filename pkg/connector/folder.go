@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
-	"github.com/conductorone/baton-sdk/pkg/types/grant"
-	"github.com/conductorone/baton-workato/pkg/connector/cpagination"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 
+	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
+	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
+	"github.com/conductorone/baton-workato/pkg/connector/cpagination"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -39,9 +39,8 @@ func (o *folderBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 
-	var bag pagination.Bag
-
-	if pToken.Token == "" {
+	// Init cache
+	if pToken.Token == "" && parentResourceID == nil {
 		err := o.cache.buildCache(ctx)
 		if err != nil {
 			return nil, "", nil, err
@@ -51,116 +50,57 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 		if err != nil {
 			return nil, "", nil, err
 		}
-
-		// List all projects to get root folders
-		bag.Push(pagination.PageState{
-			Token:          "",
-			ResourceTypeID: projectResourceType.Id,
-			ResourceID:     "",
-		})
-	} else {
-		err := bag.Unmarshal(pToken.Token)
-		if err != nil {
-			return nil, "", nil, err
-		}
 	}
 
 	rv := make([]*v2.Resource, 0)
-	state := bag.Pop()
 
-	if state == nil {
+	if parentResourceID == nil {
 		return nil, "", nil, nil
 	}
 
-	// Fetch all projects folders
-	if state.ResourceTypeID == projectResourceType.Id {
-		projects, nextToken, err := o.client.GetProjects(ctx, state.Token)
+	if parentResourceID.ResourceType == projectResourceType.Id {
+		projects, nextToken, err := o.client.GetProjects(ctx, pToken.Token)
 		if err != nil {
 			return nil, "", nil, err
 		}
 
-		if nextToken != "" {
-			bag.Push(pagination.PageState{
-				Token:          nextToken,
-				ResourceTypeID: projectResourceType.Id,
-				ResourceID:     "",
-			})
-		}
-
 		for _, project := range projects {
-			l.Info("Project", zap.String("name", project.Name))
-
 			// Create a resource for the project
-			projectRs, err := folderFolderResource(&project)
+			projectRs, err := projectFolderResource(&project, parentResourceID)
 			if err != nil {
 				return nil, "", nil, err
 			}
 
 			rv = append(rv, projectRs)
-
-			// Fetch all folders for the project
-			bag.Push(pagination.PageState{
-				Token:          "",
-				ResourceTypeID: folderResourceType.Id,
-				ResourceID:     strconv.Itoa(project.FolderId),
-			})
 		}
+
+		return rv, nextToken, nil, err
 	}
 
-	// Fetch Folder recursively
-	if state.ResourceTypeID == folderResourceType.Id {
-		var parentId *int
-
-		if state.ResourceID != "" {
-			parentIdInt, err := strconv.Atoi(state.ResourceID)
-			if err != nil {
-				return nil, "", nil, err
-			}
-
-			// Parent Folder ID
-			parentId = &parentIdInt
+	if parentResourceID.ResourceType == folderResourceType.Id {
+		parentId, err := strconv.Atoi(parentResourceID.Resource)
+		if err != nil {
+			return nil, "", nil, err
 		}
 
-		folders, nextToken, err := o.client.GetFolders(ctx, parentId, state.Token)
+		folders, nextToken, err := o.client.GetFolders(ctx, &parentId, pToken.Token)
 		if err != nil {
 			return nil, "", nil, err
 		}
 
 		for _, folder := range folders {
-			us, err := folderResource(&folder)
+			us, err := folderResource(&folder, parentResourceID)
 			if err != nil {
 				return nil, "", nil, err
 			}
 			rv = append(rv, us)
-
-			bag.Push(pagination.PageState{
-				Token:          "",
-				ResourceTypeID: folderResourceType.Id,
-				ResourceID:     us.Id.Resource,
-			})
 		}
 
-		if nextToken != "" {
-			nextStateId := ""
-
-			if parentId != nil {
-				nextStateId = strconv.Itoa(*parentId)
-			}
-
-			bag.Push(pagination.PageState{
-				Token:          nextToken,
-				ResourceTypeID: folderResourceType.Id,
-				ResourceID:     nextStateId,
-			})
-		}
+		return rv, nextToken, nil, nil
 	}
 
-	marshal, err := bag.Marshal()
-	if err != nil {
-		return nil, "", nil, err
-	}
-
-	return rv, marshal, nil, nil
+	l.Warn("Unknown parent resource type", zap.String("parent_resource_type", parentResourceID.ResourceType))
+	return nil, "", nil, nil
 }
 
 // Entitlements always returns an empty slice for users.
@@ -232,7 +172,14 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToke
 				return nil, "", nil, err
 			}
 
-			newGrant := grant.NewGrant(resource, collaboratorAccessEntitlement, collaboratorId)
+			// Collaborator only access to the folder if a role have access
+			// To update collaborator folder access, the role must be updated
+			newGrant := grant.NewGrant(
+				resource,
+				collaboratorAccessEntitlement,
+				collaboratorId,
+				grant.WithAnnotation(&v2.GrantImmutable{}),
+			)
 			rv = append(rv, newGrant)
 		}
 	}
@@ -272,7 +219,7 @@ func newFolderBuilder(client *client.WorkatoClient) *folderBuilder {
 	}
 }
 
-func folderResource(folder *client.Folder) (*v2.Resource, error) {
+func folderResource(folder *client.Folder, parentResourceId *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
 		"id":         folder.Id,
 		"name":       folder.Name,
@@ -290,6 +237,12 @@ func folderResource(folder *client.Folder) (*v2.Resource, error) {
 		folderResourceType,
 		folder.Id,
 		traits,
+		rs.WithParentResourceID(parentResourceId),
+		rs.WithAnnotation(
+			&v2.ChildResourceType{
+				ResourceTypeId: folderResourceType.Id,
+			},
+		),
 	)
 	if err != nil {
 		return nil, err
@@ -298,7 +251,7 @@ func folderResource(folder *client.Folder) (*v2.Resource, error) {
 	return ret, nil
 }
 
-func folderFolderResource(project *client.Project) (*v2.Resource, error) {
+func projectFolderResource(project *client.Project, parentResourceId *v2.ResourceId) (*v2.Resource, error) {
 	name := fmt.Sprintf("ROOT PROJECT: %s", project.Name)
 
 	profile := map[string]interface{}{
@@ -316,6 +269,12 @@ func folderFolderResource(project *client.Project) (*v2.Resource, error) {
 		folderResourceType,
 		project.FolderId,
 		traits,
+		rs.WithParentResourceID(parentResourceId),
+		rs.WithAnnotation(
+			&v2.ChildResourceType{
+				ResourceTypeId: folderResourceType.Id,
+			},
+		),
 	)
 	if err != nil {
 		return nil, err

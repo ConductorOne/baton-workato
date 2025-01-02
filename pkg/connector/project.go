@@ -3,7 +3,7 @@ package connector
 import (
 	"context"
 
-	"github.com/conductorone/baton-sdk/pkg/types/resource"
+	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -64,15 +64,20 @@ func projectResource(project *client.Project) (*v2.Resource, error) {
 		"folder_id":   project.FolderId,
 	}
 
-	traits := []resource.AppTraitOption{
-		resource.WithAppProfile(profile),
+	traits := []rs.AppTraitOption{
+		rs.WithAppProfile(profile),
 	}
 
-	ret, err := resource.NewAppResource(
+	ret, err := rs.NewAppResource(
 		project.Name,
 		projectResourceType,
 		project.Id,
 		traits,
+		rs.WithAnnotation(
+			&v2.ChildResourceType{
+				ResourceTypeId: folderResourceType.Id,
+			},
+		),
 	)
 	if err != nil {
 		return nil, err
