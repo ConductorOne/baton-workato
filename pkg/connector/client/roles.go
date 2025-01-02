@@ -3,18 +3,17 @@ package client
 import (
 	"context"
 	"fmt"
-	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"net/http"
 	"strconv"
 )
 
-func (c *WorkatoClient) GetRoles(ctx context.Context, pToken *pagination.Token) ([]Role, string, error) {
+func (c *WorkatoClient) GetRoles(ctx context.Context, pToken string) ([]Role, string, error) {
 	var response []Role
 	var err error
 
 	page := 0
-	if pToken.Token != "" {
-		page, err = strconv.Atoi(pToken.Token)
+	if pToken != "" {
+		page, err = strconv.Atoi(pToken)
 		if err != nil {
 			return nil, "", ErrInvalidPaginationToken
 		}

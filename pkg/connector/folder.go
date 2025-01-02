@@ -19,12 +19,14 @@ import (
 )
 
 const (
-	accessEntitlement = "access"
+	collaboratorAccessEntitlement = "collaborator-access"
+	roleAccessEntitlement         = "role-access"
 )
 
 type folderBuilder struct {
-	client *client.WorkatoClient
-	cache  *collaboratorCache
+	client    *client.WorkatoClient
+	cache     *collaboratorCache
+	roleCache *roleCache
 }
 
 func (o *folderBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
@@ -40,6 +42,11 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 
 	if pToken.Token == "" {
 		err := o.cache.buildCache(ctx)
+		if err != nil {
+			return nil, "", nil, err
+		}
+
+		err = o.roleCache.buildCache(ctx)
 		if err != nil {
 			return nil, "", nil, err
 		}
@@ -161,25 +168,23 @@ func (o *folderBuilder) Entitlements(_ context.Context, resource *v2.Resource, _
 	var rv []*v2.Entitlement
 	assigmentOptions := []entitlement.EntitlementOption{
 		entitlement.WithGrantableTo(roleResourceType),
-		entitlement.WithDescription(fmt.Sprintf("role can acess the folder")),
+		entitlement.WithDescription(fmt.Sprintf("Role can acess the folder")),
 		entitlement.WithDisplayName(fmt.Sprintf("%s acess %s", roleResourceType.DisplayName, resource.DisplayName)),
 	}
-	rv = append(rv, entitlement.NewAssignmentEntitlement(resource, accessEntitlement, assigmentOptions...))
+	rv = append(rv, entitlement.NewAssignmentEntitlement(resource, roleAccessEntitlement, assigmentOptions...))
 
 	assigmentOptions = []entitlement.EntitlementOption{
 		entitlement.WithGrantableTo(collaboratorResourceType),
 		entitlement.WithDescription(fmt.Sprintf("Collaborator can acess the folder")),
 		entitlement.WithDisplayName(fmt.Sprintf("%s acess %s", collaboratorResourceType.DisplayName, resource.DisplayName)),
 	}
-	rv = append(rv, entitlement.NewAssignmentEntitlement(resource, accessEntitlement, assigmentOptions...))
+	rv = append(rv, entitlement.NewAssignmentEntitlement(resource, collaboratorAccessEntitlement, assigmentOptions...))
 
 	return rv, "", nil, nil
 }
 
 // Grants always returns an empty slice for users since they don't have any entitlements.
 func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
-	l := ctxzap.Extract(ctx)
-
 	type Bag struct {
 		ResourceTypeID string
 		Page           int
@@ -214,7 +219,6 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToke
 	var rv []*v2.Grant
 
 	if state.ResourceTypeID == collaboratorResourceType.Id {
-
 		folderId, err := strconv.Atoi(resource.Id.Resource)
 		if err != nil {
 			return nil, "", nil, err
@@ -222,16 +226,32 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToke
 
 		collaborators := o.cache.getUsersByFolder(folderId)
 
-		l.Info("Collaborators CACHE", zap.Int("collaborators", len(collaborators)), zap.Int("folderId", folderId))
-
 		for _, collaborator := range collaborators {
-
 			collaboratorId, err := rs.NewResourceID(collaboratorResourceType, collaborator.User.Id)
 			if err != nil {
 				return nil, "", nil, err
 			}
 
-			newGrant := grant.NewGrant(resource, accessEntitlement, collaboratorId)
+			newGrant := grant.NewGrant(resource, collaboratorAccessEntitlement, collaboratorId)
+			rv = append(rv, newGrant)
+		}
+	}
+
+	if state.ResourceTypeID == roleResourceType.Id {
+		folderId, err := strconv.Atoi(resource.Id.Resource)
+		if err != nil {
+			return nil, "", nil, err
+		}
+
+		roles := o.roleCache.getRoleByFolder(folderId)
+
+		for _, role := range roles {
+			roleID, err := rs.NewResourceID(roleResourceType, role.Id)
+			if err != nil {
+				return nil, "", nil, err
+			}
+
+			newGrant := grant.NewGrant(resource, roleAccessEntitlement, roleID)
 			rv = append(rv, newGrant)
 		}
 	}
@@ -246,8 +266,9 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToke
 
 func newFolderBuilder(client *client.WorkatoClient) *folderBuilder {
 	return &folderBuilder{
-		client: client,
-		cache:  newPrivilegeCache(client),
+		client:    client,
+		cache:     newCollaboratorCache(client),
+		roleCache: newRoleCache(client),
 	}
 }
 

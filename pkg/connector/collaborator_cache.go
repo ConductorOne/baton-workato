@@ -16,13 +16,15 @@ type collaboratorCache struct {
 	client          *client.WorkatoClient
 	privilegeToUser map[string][]*CompoundUser
 	folderToUser    map[int][]*CompoundUser
+	roleToUser      map[string][]*CompoundUser
 }
 
-func newPrivilegeCache(workatoClient *client.WorkatoClient) *collaboratorCache {
+func newCollaboratorCache(workatoClient *client.WorkatoClient) *collaboratorCache {
 	return &collaboratorCache{
 		client:          workatoClient,
 		privilegeToUser: make(map[string][]*CompoundUser),
 		folderToUser:    make(map[int][]*CompoundUser),
+		roleToUser:      make(map[string][]*CompoundUser),
 	}
 }
 
@@ -33,6 +35,7 @@ func (p *collaboratorCache) buildCache(ctx context.Context) error {
 
 	p.privilegeToUser = make(map[string][]*CompoundUser)
 	p.folderToUser = make(map[int][]*CompoundUser)
+	p.roleToUser = make(map[string][]*CompoundUser)
 
 	collaborators, err := p.client.GetCollaborators(ctx)
 	if err != nil {
@@ -45,24 +48,28 @@ func (p *collaboratorCache) buildCache(ctx context.Context) error {
 			return err
 		}
 
+		compoundUser := &CompoundUser{
+			User:       &collaborator,
+			UserDetail: collaboratorDetails,
+		}
+
 		// Build for privileges
 		for keyGroup, values := range collaboratorDetails.Privileges {
 			for _, value := range values {
 				privilegeKey := workato.PrivilegeId(keyGroup, value)
 
-				p.privilegeToUser[privilegeKey] = append(p.privilegeToUser[privilegeKey], &CompoundUser{
-					User:       &collaborator,
-					UserDetail: collaboratorDetails,
-				})
+				p.privilegeToUser[privilegeKey] = append(p.privilegeToUser[privilegeKey], compoundUser)
 			}
 		}
 
 		// Build for folders
 		for _, folderId := range collaboratorDetails.FolderIds {
-			p.folderToUser[folderId] = append(p.folderToUser[folderId], &CompoundUser{
-				User:       &collaborator,
-				UserDetail: collaboratorDetails,
-			})
+			p.folderToUser[folderId] = append(p.folderToUser[folderId], compoundUser)
+		}
+
+		// Build for roles
+		for _, role := range collaborator.Roles {
+			p.roleToUser[role.RoleName] = append(p.roleToUser[role.RoleName], compoundUser)
 		}
 	}
 
@@ -117,6 +124,15 @@ func (p *collaboratorCache) getUsersByPrivilege(privilegeKey string) []*Compound
 
 func (p *collaboratorCache) getUsersByFolder(folderId int) []*CompoundUser {
 	value, ok := p.folderToUser[folderId]
+	if !ok {
+		return make([]*CompoundUser, 0)
+	}
+
+	return value
+}
+
+func (p *collaboratorCache) getUsersByRole(roleName string) []*CompoundUser {
+	value, ok := p.roleToUser[roleName]
 	if !ok {
 		return make([]*CompoundUser, 0)
 	}

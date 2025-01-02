@@ -95,7 +95,7 @@ func (o *privilegeBuilder) Grants(ctx context.Context, resource *v2.Resource, pT
 func newPrivilegeBuilder(client *client.WorkatoClient) *privilegeBuilder {
 	return &privilegeBuilder{
 		client: client,
-		cache:  newPrivilegeCache(client),
+		cache:  newCollaboratorCache(client),
 	}
 }
 
