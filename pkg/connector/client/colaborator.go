@@ -17,8 +17,8 @@ func (c *WorkatoClient) GetCollaborators(ctx context.Context) ([]Collaborator, e
 	return response.Data, nil
 }
 
-func (c *WorkatoClient) GetCollaboratorById(ctx context.Context, id int) (*CollaboratorDetails, error) {
-	var response CommonPagination[CollaboratorDetails]
+func (c *WorkatoClient) GetCollaboratorPrivileges(ctx context.Context, id int) ([]*CollaboratorPrivilege, error) {
+	var response CommonPagination[*CollaboratorPrivilege]
 
 	pathString := fmt.Sprintf(GetCollaboratorByIdPath, id)
 
@@ -31,5 +31,22 @@ func (c *WorkatoClient) GetCollaboratorById(ctx context.Context, id int) (*Colla
 		return nil, fmt.Errorf("baton-workato: expected 1 collaborator, got %d", len(response.Data))
 	}
 
-	return &response.Data[0], nil
+	return response.Data, nil
+}
+
+func (c *WorkatoClient) UpdateCollaborator(ctx context.Context, id int, roles []SimpleRole) error {
+	pathString := fmt.Sprintf(UpdateCollaboratorByIdPath, id)
+
+	body := struct {
+		EnvRoles []SimpleRole `json:"env_roles"`
+	}{
+		EnvRoles: roles,
+	}
+
+	err := c.doRequest(ctx, http.MethodPut, c.getPath(pathString), nil, body)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

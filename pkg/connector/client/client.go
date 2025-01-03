@@ -15,11 +15,12 @@ var (
 )
 
 var (
-	GetCollaboratorsPath    = "api/members"
-	GetCollaboratorByIdPath = "api/members/%d/privileges"
-	GetRolesPath            = "api/roles"
-	GetProjectsPath         = "api/projects"
-	GetFoldersPath          = "api/folders"
+	GetCollaboratorsPath       = "api/members"
+	GetCollaboratorByIdPath    = "api/members/%d/privileges"
+	UpdateCollaboratorByIdPath = "/api/members/%d"
+	GetRolesPath               = "api/roles"
+	GetProjectsPath            = "api/projects"
+	GetFoldersPath             = "api/folders"
 )
 
 type WorkatoClient struct {

@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"fmt"
+	"github.com/conductorone/baton-workato/pkg/connector/workato"
 	"strconv"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
@@ -211,10 +212,10 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToke
 	return rv, nextToken, nil, nil
 }
 
-func newFolderBuilder(client *client.WorkatoClient) *folderBuilder {
+func newFolderBuilder(client *client.WorkatoClient, env workato.Environment) *folderBuilder {
 	return &folderBuilder{
 		client:    client,
-		cache:     newCollaboratorCache(client),
+		cache:     newCollaboratorCache(client, env),
 		roleCache: newRoleCache(client),
 	}
 }

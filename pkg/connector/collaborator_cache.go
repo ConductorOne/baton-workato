@@ -2,6 +2,8 @@ package connector
 
 import (
 	"context"
+	"github.com/conductorone/baton-workato/pkg/connector/ucache"
+	"strconv"
 
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
@@ -10,22 +12,28 @@ import (
 
 type CompoundUser struct {
 	User       *client.Collaborator
-	UserDetail *client.CollaboratorDetails
+	UserDetail []*client.CollaboratorPrivilege
+}
+
+func (c *CompoundUser) Id() string {
+	return strconv.Itoa(c.User.Id)
 }
 
 type collaboratorCache struct {
 	client          *client.WorkatoClient
-	privilegeToUser map[string][]*CompoundUser
-	folderToUser    map[int][]*CompoundUser
-	roleToUser      map[string][]*CompoundUser
+	privilegeToUser *ucache.HashSet[string, string, CompoundUser]
+	folderToUser    *ucache.HashSet[int, string, CompoundUser]
+	roleToUser      *ucache.HashSet[string, string, CompoundUser]
+	env             workato.Environment
 }
 
-func newCollaboratorCache(workatoClient *client.WorkatoClient) *collaboratorCache {
+func newCollaboratorCache(workatoClient *client.WorkatoClient, env workato.Environment) *collaboratorCache {
 	return &collaboratorCache{
 		client:          workatoClient,
-		privilegeToUser: make(map[string][]*CompoundUser),
-		folderToUser:    make(map[int][]*CompoundUser),
-		roleToUser:      make(map[string][]*CompoundUser),
+		privilegeToUser: ucache.NewUCache[string, string, CompoundUser](),
+		folderToUser:    ucache.NewUCache[int, string, CompoundUser](),
+		roleToUser:      ucache.NewUCache[string, string, CompoundUser](),
+		env:             env,
 	}
 }
 
@@ -34,9 +42,9 @@ func (p *collaboratorCache) buildCache(ctx context.Context) error {
 
 	l.Info("Building cache for collaborators")
 
-	p.privilegeToUser = make(map[string][]*CompoundUser)
-	p.folderToUser = make(map[int][]*CompoundUser)
-	p.roleToUser = make(map[string][]*CompoundUser)
+	p.privilegeToUser = ucache.NewUCache[string, string, CompoundUser]()
+	p.folderToUser = ucache.NewUCache[int, string, CompoundUser]()
+	p.roleToUser = ucache.NewUCache[string, string, CompoundUser]()
 
 	collaborators, err := p.client.GetCollaborators(ctx)
 	if err != nil {
@@ -44,33 +52,39 @@ func (p *collaboratorCache) buildCache(ctx context.Context) error {
 	}
 
 	for _, collaborator := range collaborators {
-		collaboratorDetails, err := p.client.GetCollaboratorById(ctx, collaborator.Id)
+		collaboratorRoles, err := p.client.GetCollaboratorPrivileges(ctx, collaborator.Id)
 		if err != nil {
 			return err
 		}
 
 		compoundUser := &CompoundUser{
 			User:       &collaborator,
-			UserDetail: collaboratorDetails,
+			UserDetail: collaboratorRoles,
 		}
 
-		// Build for privileges
-		for keyGroup, values := range collaboratorDetails.Privileges {
-			for _, value := range values {
-				privilegeKey := workato.PrivilegeId(keyGroup, value)
-
-				p.privilegeToUser[privilegeKey] = append(p.privilegeToUser[privilegeKey], compoundUser)
+		for _, collaboratorRole := range collaboratorRoles {
+			if collaboratorRole.EnvironmentType != p.env.String() {
+				continue
 			}
-		}
 
-		// Build for folders
-		for _, folderId := range collaboratorDetails.FolderIDs {
-			p.folderToUser[folderId] = append(p.folderToUser[folderId], compoundUser)
+			// Build for privileges
+			for keyGroup, values := range collaboratorRole.Privileges {
+				for _, value := range values {
+					privilegeKey := workato.PrivilegeId(keyGroup, value)
+
+					p.privilegeToUser.Set(privilegeKey, compoundUser.Id(), compoundUser)
+				}
+			}
+
+			// Build for folders
+			for _, folderId := range collaboratorRole.FolderIDs {
+				p.folderToUser.Set(folderId, compoundUser.Id(), compoundUser)
+			}
 		}
 
 		// Build for roles
 		for _, role := range collaborator.Roles {
-			p.roleToUser[role.RoleName] = append(p.roleToUser[role.RoleName], compoundUser)
+			p.roleToUser.Set(role.RoleName, compoundUser.Id(), compoundUser)
 		}
 	}
 
@@ -116,28 +130,13 @@ func (p *collaboratorCache) GetAllFoldersRecur(ctx context.Context, parentId *in
 }
 
 func (p *collaboratorCache) getUsersByPrivilege(privilegeKey string) []*CompoundUser {
-	value, ok := p.privilegeToUser[privilegeKey]
-	if !ok {
-		return make([]*CompoundUser, 0)
-	}
-
-	return value
+	return p.privilegeToUser.GetAll(privilegeKey)
 }
 
 func (p *collaboratorCache) getUsersByFolder(folderId int) []*CompoundUser {
-	value, ok := p.folderToUser[folderId]
-	if !ok {
-		return make([]*CompoundUser, 0)
-	}
-
-	return value
+	return p.folderToUser.GetAll(folderId)
 }
 
 func (p *collaboratorCache) getUsersByRole(roleName string) []*CompoundUser {
-	value, ok := p.roleToUser[roleName]
-	if !ok {
-		return make([]*CompoundUser, 0)
-	}
-
-	return value
+	return p.roleToUser.GetAll(roleName)
 }

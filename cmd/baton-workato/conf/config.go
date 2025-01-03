@@ -2,6 +2,7 @@ package conf
 
 import (
 	"errors"
+	"github.com/conductorone/baton-workato/pkg/connector/workato"
 
 	"github.com/conductorone/baton-sdk/pkg/field"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
@@ -21,12 +22,19 @@ var (
 		field.WithDefaultValue("us"),
 	)
 
+	WorkatoEnv = field.StringField(
+		"workato-env",
+		field.WithDescription("Your workato environment (dev, test, prod) default is 'dev'"),
+		field.WithDefaultValue("dev"),
+	)
+
 	// ConfigurationFields defines the external configuration required for the
 	// connector to run. Note: these fields can be marked as optional or
 	// required.
 	ConfigurationFields = []field.SchemaField{
 		ApiKeyField,
 		WorkatoDataCenterFiekd,
+		WorkatoEnv,
 	}
 
 	// FieldRelationships defines relationships between the fields listed in
@@ -43,6 +51,11 @@ var (
 func ValidateConfig(v *viper.Viper) error {
 	if _, ok := client.WorkatoDataCenters[v.GetString(WorkatoDataCenterFiekd.FieldName)]; !ok {
 		return errors.New("invalid workato data center")
+	}
+
+	_, err := workato.EnvFromString(v.GetString(WorkatoEnv.FieldName))
+	if err != nil {
+		return err
 	}
 
 	return nil

@@ -3,7 +3,6 @@ package connector
 import (
 	"context"
 	"fmt"
-
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
@@ -12,6 +11,7 @@ import (
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
+	"strconv"
 )
 
 var (
@@ -175,10 +175,48 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken 
 	return rv, "", nil, nil
 }
 
-func newRoleBuilder(client *client.WorkatoClient) *roleBuilder {
+func (o *roleBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlement *v2.Entitlement) ([]*v2.Grant, annotations.Annotations, error) {
+	// Grant a role to a collaborator
+	if resource.Id.ResourceType != collaboratorResourceType.Id {
+		grants := make([]*v2.Grant, 0)
+
+		roleName := entitlement.Resource.Id.Resource
+		userID, err := strconv.Atoi(resource.Id.Resource)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		collaborator, err := o.client.GetCollaboratorPrivileges(ctx, userID)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		roles := make([]client.SimpleRole, 0)
+		for _, role := range collaborator {
+			roles = append(roles, role.SimpleRole())
+		}
+
+		// TODO: Which environment type should be used?
+		roles = append(roles, client.SimpleRole{
+			RoleName:        roleName,
+			EnvironmentType: "dev",
+		})
+
+		return grants, nil, nil
+	}
+
+	return nil, nil, fmt.Errorf("grant not implemented for %s", resource.Id.ResourceType)
+}
+
+func (o *roleBuilder) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func newRoleBuilder(client *client.WorkatoClient, env workato.Environment) *roleBuilder {
 	return &roleBuilder{
 		client:    client,
-		cache:     newCollaboratorCache(client),
+		cache:     newCollaboratorCache(client, env),
 		roleCache: newRoleCache(client),
 	}
 }

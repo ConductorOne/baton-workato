@@ -45,14 +45,14 @@ func (o *privilegeBuilder) List(ctx context.Context, parentResourceID *v2.Resour
 
 	privileges := workato.AllCompoundPrivileges()
 
-	rv := make([]*v2.Resource, len(privileges))
+	rv := make([]*v2.Resource, 0)
 
-	for i, privilege := range privileges {
+	for _, privilege := range privileges {
 		us, err := privilegeResource(&privilege)
 		if err != nil {
 			return nil, "", nil, err
 		}
-		rv[i] = us
+		rv = append(rv, us)
 	}
 
 	return rv, "", nil, nil
@@ -100,10 +100,10 @@ func (o *privilegeBuilder) Grants(ctx context.Context, resource *v2.Resource, pT
 	return rv, "", nil, nil
 }
 
-func newPrivilegeBuilder(client *client.WorkatoClient) *privilegeBuilder {
+func newPrivilegeBuilder(client *client.WorkatoClient, env workato.Environment) *privilegeBuilder {
 	return &privilegeBuilder{
 		client: client,
-		cache:  newCollaboratorCache(client),
+		cache:  newCollaboratorCache(client, env),
 	}
 }
 

@@ -31,11 +31,18 @@ type Collaborator struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-type CollaboratorDetails struct {
+type CollaboratorPrivilege struct {
 	EnvironmentType string              `json:"environment_type"`
 	Name            string              `json:"name"`
 	Privileges      map[string][]string `json:"privileges"`
 	FolderIDs       []int               `json:"folder_ids"`
+}
+
+func (c *CollaboratorPrivilege) SimpleRole() SimpleRole {
+	return SimpleRole{
+		EnvironmentType: c.EnvironmentType,
+		RoleName:        c.Name,
+	}
 }
 
 type Role struct {

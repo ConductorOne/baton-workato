@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"github.com/conductorone/baton-workato/pkg/connector/workato"
 	"io"
 
 	"github.com/conductorone/baton-workato/pkg/connector/client"
@@ -13,15 +14,16 @@ import (
 
 type Connector struct {
 	client *client.WorkatoClient
+	env    workato.Environment
 }
 
 // ResourceSyncers returns a ResourceSyncer for each resource type that should be synced from the upstream service.
 func (d *Connector) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncer {
 	return []connectorbuilder.ResourceSyncer{
 		newCollaboratorBuilder(d.client),
-		newPrivilegeBuilder(d.client),
-		newRoleBuilder(d.client),
-		newFolderBuilder(d.client),
+		newPrivilegeBuilder(d.client, d.env),
+		newRoleBuilder(d.client, d.env),
+		newFolderBuilder(d.client, d.env),
 		newProjectBuilder(d.client),
 	}
 }
@@ -47,8 +49,9 @@ func (d *Connector) Validate(ctx context.Context) (annotations.Annotations, erro
 }
 
 // New returns a new instance of the connector.
-func New(ctx context.Context, workatoClient *client.WorkatoClient) (*Connector, error) {
+func New(ctx context.Context, workatoClient *client.WorkatoClient, env workato.Environment) (*Connector, error) {
 	return &Connector{
 		client: workatoClient,
+		env:    env,
 	}, nil
 }
