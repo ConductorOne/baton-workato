@@ -11,6 +11,7 @@ import (
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
+	"slices"
 	"strconv"
 )
 
@@ -23,6 +24,7 @@ type roleBuilder struct {
 	client    *client.WorkatoClient
 	cache     *collaboratorCache
 	roleCache *roleCache
+	env       workato.Environment
 }
 
 func (o *roleBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
@@ -196,11 +198,37 @@ func (o *roleBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlem
 			roles = append(roles, role.SimpleRole())
 		}
 
-		// TODO: Which environment type should be used?
-		roles = append(roles, client.SimpleRole{
+		newRole := client.SimpleRole{
 			RoleName:        roleName,
-			EnvironmentType: "dev",
+			EnvironmentType: o.env.String(),
+		}
+
+		index := slices.IndexFunc(roles, func(other client.SimpleRole) bool {
+			return other.Equals(newRole)
 		})
+
+		if index >= 0 {
+			return []*v2.Grant{}, annotations.New(&v2.GrantAlreadyExists{}), nil
+		}
+
+		roles = append(roles, newRole)
+
+		err = o.client.UpdateCollaboratorRoles(ctx, userID, roles)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		collaboratorId, err := rs.NewResourceID(collaboratorResourceType, userID)
+		newGrant := grant.NewGrant(
+			resource,
+			collaboratorHasRoleEntitlement,
+			collaboratorId,
+			grant.WithGrantMetadata(map[string]interface{}{
+				"environment_type": o.env.String(),
+			}),
+		)
+
+		grants = append(grants, newGrant)
 
 		return grants, nil, nil
 	}
@@ -209,8 +237,47 @@ func (o *roleBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlem
 }
 
 func (o *roleBuilder) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
-	//TODO implement me
-	panic("implement me")
+	if grant.Principal.Id.ResourceType != collaboratorResourceType.Id {
+		roleName := grant.Entitlement.Resource.Id.Resource
+		userID, err := strconv.Atoi(grant.Principal.Id.Resource)
+		if err != nil {
+			return nil, err
+		}
+
+		collaborator, err := o.client.GetCollaboratorPrivileges(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+
+		roles := make([]client.SimpleRole, 0)
+		for _, role := range collaborator {
+			roles = append(roles, role.SimpleRole())
+		}
+
+		newRole := client.SimpleRole{
+			RoleName:        roleName,
+			EnvironmentType: o.env.String(),
+		}
+
+		index := slices.IndexFunc(roles, func(other client.SimpleRole) bool {
+			return other.Equals(newRole)
+		})
+
+		if index == -1 {
+			return annotations.New(&v2.GrantAlreadyRevoked{}), nil
+		}
+
+		roles = append(roles[:index], roles[index+1:]...)
+
+		err = o.client.UpdateCollaboratorRoles(ctx, userID, roles)
+		if err != nil {
+			return nil, err
+		}
+
+		return nil, nil
+	}
+
+	return nil, fmt.Errorf("revoke not implemented for %s", grant.Principal.Id.ResourceType)
 }
 
 func newRoleBuilder(client *client.WorkatoClient, env workato.Environment) *roleBuilder {
@@ -218,6 +285,7 @@ func newRoleBuilder(client *client.WorkatoClient, env workato.Environment) *role
 		client:    client,
 		cache:     newCollaboratorCache(client, env),
 		roleCache: newRoleCache(client),
+		env:       env,
 	}
 }
 

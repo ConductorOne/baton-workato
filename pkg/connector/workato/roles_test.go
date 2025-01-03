@@ -13,3 +13,13 @@ func TestBaseRoles(t *testing.T) {
 		t.Errorf("Error: %v", err)
 	}
 }
+
+func TestName(t *testing.T) {
+	roles := []int{}
+
+	roles = append(roles[:0], roles[0+1:]...)
+
+	if len(roles) != 4 {
+		t.Errorf("Error: %v", roles)
+	}
+}

@@ -34,7 +34,7 @@ func (c *WorkatoClient) GetCollaboratorPrivileges(ctx context.Context, id int) (
 	return response.Data, nil
 }
 
-func (c *WorkatoClient) UpdateCollaborator(ctx context.Context, id int, roles []SimpleRole) error {
+func (c *WorkatoClient) UpdateCollaboratorRoles(ctx context.Context, id int, roles []SimpleRole) error {
 	pathString := fmt.Sprintf(UpdateCollaboratorByIdPath, id)
 
 	body := struct {

@@ -15,6 +15,12 @@ type SimpleRole struct {
 	EnvironmentType string `json:"environment_type"`
 	RoleName        string `json:"role_name"`
 }
+
+func (s *SimpleRole) Equals(other SimpleRole) bool {
+	return s.EnvironmentType == other.EnvironmentType &&
+		s.RoleName == other.RoleName
+}
+
 type Collaborator struct {
 	Id              int          `json:"id"`
 	GrantType       string       `json:"grant_type"`
