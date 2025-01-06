@@ -68,7 +68,7 @@ func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress
 		if resp != nil {
 			defer resp.Body.Close()
 		}
-	case http.MethodPost, http.MethodPatch, http.MethodDelete:
+	case http.MethodPost, http.MethodPatch, http.MethodDelete, http.MethodPut:
 		resp, err = c.httpClient.Do(req)
 		if resp != nil {
 			defer resp.Body.Close()

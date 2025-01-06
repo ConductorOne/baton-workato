@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -180,7 +181,7 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken 
 
 func (o *roleBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlement *v2.Entitlement) ([]*v2.Grant, annotations.Annotations, error) {
 	// Grant a role to a collaborator
-	if resource.Id.ResourceType != collaboratorResourceType.Id {
+	if resource.Id.ResourceType == collaboratorResourceType.Id {
 		grants := make([]*v2.Grant, 0)
 
 		roleName := entitlement.Resource.Id.Resource
@@ -194,10 +195,7 @@ func (o *roleBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlem
 			return nil, nil, err
 		}
 
-		roles := make([]client.SimpleRole, 0)
-		for _, role := range collaborator {
-			roles = append(roles, role.SimpleRole())
-		}
+		roles := toSimpleRole(collaborator)
 
 		newRole := client.SimpleRole{
 			RoleName:        roleName,
@@ -212,7 +210,16 @@ func (o *roleBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlem
 			return []*v2.Grant{}, annotations.New(&v2.GrantAlreadyExists{}), nil
 		}
 
-		roles = append(roles, newRole)
+		// Workato just accept one role per environment
+		sameEnvIndex := slices.IndexFunc(roles, func(other client.SimpleRole) bool {
+			return other.EnvironmentType == o.env.String()
+		})
+
+		if sameEnvIndex >= 0 {
+			roles[sameEnvIndex] = newRole
+		} else {
+			roles = append(roles, newRole)
+		}
 
 		err = o.client.UpdateCollaboratorRoles(ctx, userID, roles)
 		if err != nil {
@@ -242,44 +249,8 @@ func (o *roleBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlem
 }
 
 func (o *roleBuilder) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
-	if grant.Principal.Id.ResourceType != collaboratorResourceType.Id {
-		roleName := grant.Entitlement.Resource.Id.Resource
-		userID, err := strconv.Atoi(grant.Principal.Id.Resource)
-		if err != nil {
-			return nil, err
-		}
-
-		collaborator, err := o.client.GetCollaboratorPrivileges(ctx, userID)
-		if err != nil {
-			return nil, err
-		}
-
-		roles := make([]client.SimpleRole, 0)
-		for _, role := range collaborator {
-			roles = append(roles, role.SimpleRole())
-		}
-
-		newRole := client.SimpleRole{
-			RoleName:        roleName,
-			EnvironmentType: o.env.String(),
-		}
-
-		index := slices.IndexFunc(roles, func(other client.SimpleRole) bool {
-			return other.Equals(newRole)
-		})
-
-		if index == -1 {
-			return annotations.New(&v2.GrantAlreadyRevoked{}), nil
-		}
-
-		roles = append(roles[:index], roles[index+1:]...)
-
-		err = o.client.UpdateCollaboratorRoles(ctx, userID, roles)
-		if err != nil {
-			return nil, err
-		}
-
-		return nil, nil
+	if grant.Principal.Id.ResourceType == collaboratorResourceType.Id {
+		return nil, errors.New("workato does not have revoke role for collaborator, try grant another role for the same env")
 	}
 
 	return nil, fmt.Errorf("revoke not implemented for %s", grant.Principal.Id.ResourceType)
@@ -341,4 +312,13 @@ func workatoBaseRoleResource(role *workato.Role) (*v2.Resource, error) {
 	}
 
 	return ret, nil
+}
+
+func toSimpleRole(collaboratorRoles []*client.CollaboratorPrivilege) []client.SimpleRole {
+	roles := make([]client.SimpleRole, 0)
+	for _, role := range collaboratorRoles {
+		roles = append(roles, role.SimpleRole())
+	}
+
+	return roles
 }

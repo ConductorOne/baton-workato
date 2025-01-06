@@ -72,6 +72,6 @@ jobs:
         run: |
           case "${{ matrix.test-case }}" in
             "roles")
-              ./scripts/validate-grant.sh ${{ env.CONNECTOR_PRINCIPAL }} collaborator role:Operator:collaborator-has role:Operator:collaborator-has:collaborator:${{ env.CONNECTOR_PRINCIPAL }}
+              BATON_SKIP_REVOKE=1 ./scripts/validate-grant.sh ${{ env.CONNECTOR_PRINCIPAL }} collaborator role:Operator:collaborator-has role:Operator:collaborator-has:collaborator:${{ env.CONNECTOR_PRINCIPAL }}
               ;;
           esac

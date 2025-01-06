@@ -85,6 +85,10 @@ func (p *collaboratorCache) buildCache(ctx context.Context) error {
 
 		// Build for roles
 		for _, role := range collaborator.Roles {
+			if role.EnvironmentType != p.env.String() {
+				continue
+			}
+
 			p.roleToUser.Set(role.RoleName, compoundUser.Id(), compoundUser)
 		}
 	}

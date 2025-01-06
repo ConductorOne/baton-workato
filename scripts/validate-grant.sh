@@ -14,6 +14,12 @@ if [ -z "$BATON" ]; then
   echo "BATON not set. using baton"
   BATON=baton
 fi
+
+if [ -z "$BATON_SKIP_REVOKE" ]; then
+  echo "BATON not set. using baton"
+  $BATON_SKIP_REVOKE=false
+fi
+
 # Error on unbound variables now that we've set BATON & BATON_CONNECTOR
 set -u
 
@@ -28,21 +34,23 @@ $BATON_CONNECTOR
 # Check grant was granted
 $BATON grants --entitlement="$BATON_ENTITLEMENT" --output-format=json | jq --exit-status ".grants[] | select( .principal.id.resource == \"$BATON_PRINCIPAL\" )"
 
-## Revoke grant
-$BATON_CONNECTOR --revoke-grant="$BATON_GRANT"
-# Revoke already-revoked grant
-$BATON_CONNECTOR --revoke-grant="$BATON_GRANT"
+if [ $BATON_SKIP_REVOKE -eq 0 ]; then
+    ## Revoke grant
+    $BATON_CONNECTOR --revoke-grant="$BATON_GRANT"
+    # Revoke already-revoked grant
+    $BATON_CONNECTOR --revoke-grant="$BATON_GRANT"
 
-# Check grant was revoked
-$BATON_CONNECTOR
-$BATON grants --entitlement="$BATON_ENTITLEMENT" --output-format=json | jq --exit-status "if .grants then [ .grants[] | select( .principal.id.resource == \"$BATON_PRINCIPAL\" ) ] | length == 0 else . end"
+    # Check grant was revoked
+    $BATON_CONNECTOR
+    $BATON grants --entitlement="$BATON_ENTITLEMENT" --output-format=json | jq --exit-status "if .grants then [ .grants[] | select( .principal.id.resource == \"$BATON_PRINCIPAL\" ) ] | length == 0 else . end"
 
-# Re-grant entitlement
-$BATON_CONNECTOR --grant-entitlement="$BATON_ENTITLEMENT" --grant-principal="$BATON_PRINCIPAL" --grant-principal-type="$BATON_PRINCIPAL_TYPE"
+    # Re-grant entitlement
+    $BATON_CONNECTOR --grant-entitlement="$BATON_ENTITLEMENT" --grant-principal="$BATON_PRINCIPAL" --grant-principal-type="$BATON_PRINCIPAL_TYPE"
 
-# Check grant was re-granted
-$BATON_CONNECTOR
-$BATON grants --entitlement="$BATON_ENTITLEMENT" --output-format=json | jq --exit-status ".grants[] | select( .principal.id.resource == \"$BATON_PRINCIPAL\" )"
+    # Check grant was re-granted
+    $BATON_CONNECTOR
+    $BATON grants --entitlement="$BATON_ENTITLEMENT" --output-format=json | jq --exit-status ".grants[] | select( .principal.id.resource == \"$BATON_PRINCIPAL\" )"
 
-## Revoke grant
-$BATON_CONNECTOR --revoke-grant="$BATON_GRANT"
+    ## Revoke grant
+    $BATON_CONNECTOR --revoke-grant="$BATON_GRANT"
+fi

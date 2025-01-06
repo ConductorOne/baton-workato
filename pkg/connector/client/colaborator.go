@@ -37,10 +37,21 @@ func (c *WorkatoClient) GetCollaboratorPrivileges(ctx context.Context, id int) (
 func (c *WorkatoClient) UpdateCollaboratorRoles(ctx context.Context, id int, roles []SimpleRole) error {
 	pathString := fmt.Sprintf(UpdateCollaboratorByIdPath, id)
 
+	// Needs this because the json payload it's different https://docs.workato.com/workato-api/team.html#update-collaborator-roles
+	type SimpleRoleRequest struct {
+		EnvironmentType string `json:"environment_type"`
+		RoleName        string `json:"name"`
+	}
+
+	var rolesRequest []SimpleRoleRequest
+	for _, role := range roles {
+		rolesRequest = append(rolesRequest, SimpleRoleRequest(role))
+	}
+
 	body := struct {
-		EnvRoles []SimpleRole `json:"env_roles"`
+		EnvRoles []SimpleRoleRequest `json:"env_roles"`
 	}{
-		EnvRoles: roles,
+		EnvRoles: rolesRequest,
 	}
 
 	err := c.doRequest(ctx, http.MethodPut, c.getPath(pathString), nil, body)
