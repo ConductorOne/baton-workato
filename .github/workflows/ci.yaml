@@ -52,6 +52,7 @@ jobs:
       CONNECTOR_PRINCIPAL: "${{ secrets.CONNECTOR_PRINCIPAL }}"
       BATON_WORKATO_API_KEY: ${{ secrets.BATON_WORKATO_API_KEY }}
       BATON_CONNECTOR: ./baton-workato
+      BATON_WORKATO_ENV: dev
 
     steps:
       - name: Install Go
