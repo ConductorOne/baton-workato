@@ -40,8 +40,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      BATON_LOG_LEVEL: debug
-      BATON_WORKATO_API_KEY: ${{ secrets.BATON_WORKATO_API_KEY }}
+
     steps:
       - name: Install Go
         uses: actions/setup-go@v5
@@ -56,3 +55,41 @@ jobs:
 
       - name: Install baton
         run: ./scripts/get-baton.sh && mv baton /usr/local/bin
+
+  test-provisioning:
+    needs:
+      - go-lint
+      - go-test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        test-case: [ roles ]
+
+    env:
+      BATON_LOG_LEVEL: debug
+      CONNECTOR_PRINCIPAL: "${{ secrets.CONNECTOR_PRINCIPAL }}"
+      BATON_WORKATO_API_KEY: ${{ secrets.BATON_WORKATO_API_KEY }}
+      BATON_CONNECTOR: ./baton-workato
+
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.22.x
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install baton
+        run: ./scripts/get-baton.sh && mv baton /usr/local/bin
+
+      - name: Build baton-workato
+        run: go build ./cmd/baton-workato
+
+      - name: Run tests for ${{ matrix.test-case }}
+        run: |
+          case "${{ matrix.test-case }}" in
+            "roles")
+              ./scripts/validate-grant.sh ${{ env.CONNECTOR_PRINCIPAL }} collaborator role:Operator:collaborator-has role:Operator:collaborator-has:collaborator:${{ env.CONNECTOR_PRINCIPAL }}
+              ;;
+          esac
