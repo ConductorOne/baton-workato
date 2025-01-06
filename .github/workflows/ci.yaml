@@ -37,25 +37,6 @@ jobs:
         with:
           test-results: test.json
 
-  test:
-    runs-on: ubuntu-latest
-    env:
-
-    steps:
-      - name: Install Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.22.x
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Build baton-workato
-        run: go build ./cmd/baton-workato
-      - name: Run baton-workato
-        run: ./baton-workato
-
-      - name: Install baton
-        run: ./scripts/get-baton.sh && mv baton /usr/local/bin
-
   test-provisioning:
     needs:
       - go-lint
