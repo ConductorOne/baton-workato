@@ -3,6 +3,9 @@ package connector
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strconv"
+
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
@@ -11,8 +14,6 @@ import (
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
-	"slices"
-	"strconv"
 )
 
 var (
@@ -219,6 +220,10 @@ func (o *roleBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlem
 		}
 
 		collaboratorId, err := rs.NewResourceID(collaboratorResourceType, userID)
+		if err != nil {
+			return nil, nil, err
+		}
+
 		newGrant := grant.NewGrant(
 			resource,
 			collaboratorHasRoleEntitlement,

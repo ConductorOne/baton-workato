@@ -2,8 +2,9 @@ package connector
 
 import (
 	"context"
-	"github.com/conductorone/baton-workato/pkg/connector/workato"
 	"io"
+
+	"github.com/conductorone/baton-workato/pkg/connector/workato"
 
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 

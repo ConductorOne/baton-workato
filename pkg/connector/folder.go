@@ -3,8 +3,9 @@ package connector
 import (
 	"context"
 	"fmt"
-	"github.com/conductorone/baton-workato/pkg/connector/workato"
 	"strconv"
+
+	"github.com/conductorone/baton-workato/pkg/connector/workato"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"

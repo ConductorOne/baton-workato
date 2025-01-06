@@ -2,8 +2,9 @@ package connector
 
 import (
 	"context"
-	"github.com/conductorone/baton-workato/pkg/connector/ucache"
 	"strconv"
+
+	"github.com/conductorone/baton-workato/pkg/connector/ucache"
 
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"

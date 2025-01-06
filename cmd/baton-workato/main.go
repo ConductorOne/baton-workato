@@ -3,8 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/conductorone/baton-workato/pkg/connector/workato"
 	"os"
+
+	"github.com/conductorone/baton-workato/pkg/connector/workato"
 
 	"github.com/conductorone/baton-workato/cmd/baton-workato/conf"
 

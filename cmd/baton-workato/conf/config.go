@@ -2,6 +2,7 @@ package conf
 
 import (
 	"errors"
+
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
 
 	"github.com/conductorone/baton-sdk/pkg/field"
