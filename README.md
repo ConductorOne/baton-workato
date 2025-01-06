@@ -18,7 +18,7 @@ You need to pass the workato-api-key:
 2. Create an API KEY https://app.workato.com/members/api/clients.
 3. Run it.
 
-Obs: if you have a basic account, you can ignore the subusers using ```.
+Obs: if you have a basic account, you can ignore the subusers using.
 
 ## brew
 

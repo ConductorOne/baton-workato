@@ -45,13 +45,13 @@ func NewWorkatoClient(ctx context.Context, apiKey, baseUrl string) (*WorkatoClie
 		return nil, err
 	}
 
-	uhtppClient, err := uhttp.NewBaseHttpClientWithContext(ctx, httpClient)
+	uhttpClient, err := uhttp.NewBaseHttpClientWithContext(ctx, httpClient)
 	if err != nil {
 		return nil, err
 	}
 
 	return &WorkatoClient{
-		httpClient: uhtppClient,
+		httpClient: uhttpClient,
 		baseUrl:    parseBaseUrl,
 		apiKey:     apiKey,
 		pageLimit:  500,

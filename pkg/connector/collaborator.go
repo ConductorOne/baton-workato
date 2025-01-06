@@ -74,6 +74,9 @@ func collaboratorResource(collaborator *client.Collaborator) (*v2.Resource, erro
 		resource.WithStatus(userStatus),
 		resource.WithEmail(collaborator.Email, true),
 		resource.WithUserLogin(collaborator.Email),
+		resource.WithUserLogin(collaborator.Email),
+		resource.WithCreatedAt(collaborator.CreatedAt),
+		resource.WithAccountType(v2.UserTrait_ACCOUNT_TYPE_HUMAN),
 	}
 
 	ret, err := resource.NewUserResource(

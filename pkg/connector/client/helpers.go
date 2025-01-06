@@ -30,16 +30,16 @@ func (c *WorkatoClient) getPath(path string) *url.URL {
 	return c.baseUrl.JoinPath(path)
 }
 
-func getError(resp *http.Response) (ApiError, error) {
+func getError(originalErr error, resp *http.Response) (ApiError, error) {
 	bytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return ApiError{}, err
+		return ApiError{}, errors.Join(originalErr, err)
 	}
 
 	var cErr ApiError
 	err = json.Unmarshal(bytes, &cErr)
 	if err != nil {
-		return cErr, err
+		return cErr, errors.Join(originalErr, err)
 	}
 
 	return cErr, nil
@@ -55,37 +55,27 @@ func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress
 		ctx,
 		method,
 		urlAddress,
-		uhttp.WithHeader(AuthHeaderName, fmt.Sprintf("Bearer %s", c.apiKey)),
+		uhttp.WithBearerToken(c.apiKey),
 		uhttp.WithJSONBody(body),
 	)
 	if err != nil {
 		return err
 	}
 
-	switch method {
-	case http.MethodGet:
-		resp, err = c.httpClient.Do(req, uhttp.WithResponse(&res))
-		if resp != nil {
-			defer resp.Body.Close()
-		}
-	case http.MethodPost, http.MethodPatch, http.MethodDelete, http.MethodPut:
-		resp, err = c.httpClient.Do(req)
-		if resp != nil {
-			defer resp.Body.Close()
-		}
+	var options []uhttp.DoOption
+
+	if res != nil {
+		options = append(options, uhttp.WithResponse(&res))
+	}
+
+	resp, err = c.httpClient.Do(req, options...)
+	if resp != nil {
+		defer resp.Body.Close()
 	}
 
 	if resp != nil {
-		if resp.StatusCode == http.StatusUnauthorized {
-			return errors.New("unauthorized")
-		}
-
-		if resp.StatusCode == http.StatusForbidden {
-			return errors.New("forbidden")
-		}
-
 		if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusBadRequest {
-			cErr, err := getError(resp)
+			cErr, err := getError(err, resp)
 			if err != nil {
 				return err
 			}
