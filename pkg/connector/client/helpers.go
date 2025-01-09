@@ -30,19 +30,19 @@ func (c *WorkatoClient) getPath(path string) *url.URL {
 	return c.baseUrl.JoinPath(path)
 }
 
-func getError(originalErr error, resp *http.Response) (ApiError, error) {
+func getError(originalErr error, resp *http.Response) error {
 	bytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return ApiError{}, errors.Join(originalErr, err)
+		return errors.Join(originalErr, err)
 	}
 
 	var cErr ApiError
 	err = json.Unmarshal(bytes, &cErr)
 	if err != nil {
-		return cErr, errors.Join(originalErr, err)
+		return errors.Join(originalErr, err)
 	}
 
-	return cErr, nil
+	return errors.Join(originalErr, errors.New(cErr.Message))
 }
 
 func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress *url.URL, res interface{}, body interface{}) error {
@@ -69,25 +69,19 @@ func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress
 	}
 
 	resp, err = c.httpClient.Do(req, options...)
-	if resp != nil {
-		defer resp.Body.Close()
-	}
 
-	if resp != nil {
-		if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusBadRequest {
-			cErr, err := getError(err, resp)
-			if err != nil {
-				return err
-			}
-
-			return errors.New(cErr.Message)
+	if resp == nil {
+		if err != nil {
+			return err
 		}
 
-		return err
+		return errors.New("baton-workato: response is nil and error is nil, this should never happen, might be a bug in the http client")
 	}
 
-	if err != nil {
-		return err
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusBadRequest {
+		return getError(err, resp)
 	}
 
 	return nil

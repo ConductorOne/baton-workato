@@ -3,6 +3,8 @@ package client
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"net/http"
 )
 
@@ -28,7 +30,7 @@ func (c *WorkatoClient) GetCollaboratorPrivileges(ctx context.Context, id int) (
 	}
 
 	if len(response.Data) != 1 {
-		return nil, fmt.Errorf("baton-workato: expected 1 collaborator, got %d", len(response.Data))
+		return nil, status.Errorf(codes.NotFound, "baton-workato: expected 1 collaborator, got %d", len(response.Data))
 	}
 
 	return response.Data, nil
