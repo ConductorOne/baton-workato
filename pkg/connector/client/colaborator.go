@@ -3,9 +3,10 @@ package client
 import (
 	"context"
 	"fmt"
+	"net/http"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"net/http"
 )
 
 func (c *WorkatoClient) GetCollaborators(ctx context.Context) ([]Collaborator, error) {
