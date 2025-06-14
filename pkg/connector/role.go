@@ -2,7 +2,6 @@ package connector
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -19,7 +18,6 @@ import (
 
 var (
 	collaboratorHasRoleEntitlement = "collaborator-has"
-	roleHasPrivilegeEntitlement    = "privilege-has"
 )
 
 type roleBuilder struct {
@@ -86,13 +84,6 @@ func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ *
 	}
 	rv = append(rv, entitlement.NewAssignmentEntitlement(resource, collaboratorHasRoleEntitlement, assigmentOptions...))
 
-	assigmentOptions = []entitlement.EntitlementOption{
-		entitlement.WithGrantableTo(privilegeResourceType),
-		entitlement.WithDescription(fmt.Sprintf("%s has privilege", resource.DisplayName)),
-		entitlement.WithDisplayName(fmt.Sprintf("%s has %s", resource.DisplayName, privilegeResourceType.DisplayName)),
-	}
-	rv = append(rv, entitlement.NewAssignmentEntitlement(resource, roleHasPrivilegeEntitlement, assigmentOptions...))
-
 	return rv, "", nil, nil
 }
 
@@ -127,7 +118,7 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken 
 		}
 	}
 
-	// Base Roles
+	// Base Roles - privilege grants implementation
 	if workato.IsBaseRole(resource.DisplayName) {
 		role, err := workato.GetBaseRole(resource.DisplayName)
 		if err != nil {
@@ -141,15 +132,26 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken 
 			}
 
 			newGrant := grant.NewGrant(
-				resource,
-				roleHasPrivilegeEntitlement,
-				privilegeId,
-				grant.WithAnnotation(&v2.GrantImmutable{}),
+				&v2.Resource{
+					Id: privilegeId,
+				},
+				assignedEntitlement,
+				resource.Id,
+				grant.WithAnnotation(
+					&v2.GrantImmutable{},
+					&v2.GrantExpandable{
+						EntitlementIds: []string{
+							fmt.Sprintf("role:%s:%s", resource.Id.Resource, collaboratorHasRoleEntitlement),
+						},
+						Shallow: true,
+					},
+				),
 			)
 
 			rv = append(rv, newGrant)
 		}
 	} else {
+		// privilege grants implementation
 		role := o.roleCache.getRoleById(resource.Id.Resource)
 		if role == nil {
 			return rv, "", nil, fmt.Errorf("role %s not found", resource.DisplayName)
@@ -167,9 +169,19 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken 
 			}
 
 			newGrant := grant.NewGrant(
-				resource,
-				roleHasPrivilegeEntitlement,
-				privilegeId,
+				&v2.Resource{
+					Id: privilegeId,
+				},
+				assignedEntitlement,
+				resource.Id,
+				grant.WithAnnotation(
+					&v2.GrantExpandable{
+						EntitlementIds: []string{
+							fmt.Sprintf("role:%s:%s", resource.Id.Resource, collaboratorHasRoleEntitlement),
+						},
+						Shallow: true,
+					},
+				),
 			)
 
 			rv = append(rv, newGrant)
@@ -248,11 +260,7 @@ func (o *roleBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlem
 	return nil, nil, fmt.Errorf("grant not implemented for %s", resource.Id.ResourceType)
 }
 
-func (o *roleBuilder) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
-	if grant.Principal.Id.ResourceType == collaboratorResourceType.Id {
-		return nil, errors.New("workato does not have revoke role for collaborator, try grant another role for the same env")
-	}
-
+func (o *roleBuilder) Revoke(_ context.Context, grant *v2.Grant) (annotations.Annotations, error) {
 	return nil, fmt.Errorf("revoke not implemented for %s", grant.Principal.Id.ResourceType)
 }
 

@@ -23,7 +23,6 @@ import (
 
 const (
 	collaboratorAccessEntitlement = "collaborator-access"
-	roleAccessEntitlement         = "role-access"
 )
 
 type folderBuilder struct {
@@ -108,14 +107,8 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 // Entitlements always returns an empty slice for users.
 func (o *folderBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
-	assigmentOptions := []entitlement.EntitlementOption{
-		entitlement.WithGrantableTo(roleResourceType),
-		entitlement.WithDescription(fmt.Sprintf("%s can acess %s", roleResourceType.DisplayName, resource.DisplayName)),
-		entitlement.WithDisplayName(fmt.Sprintf("%s acess %s", roleResourceType.DisplayName, resource.DisplayName)),
-	}
-	rv = append(rv, entitlement.NewPermissionEntitlement(resource, roleAccessEntitlement, assigmentOptions...))
 
-	assigmentOptions = []entitlement.EntitlementOption{
+	assigmentOptions := []entitlement.EntitlementOption{
 		entitlement.WithGrantableTo(collaboratorResourceType),
 		entitlement.WithDescription(fmt.Sprintf("%s can acess %s", collaboratorResourceType.DisplayName, resource.DisplayName)),
 		entitlement.WithDisplayName(fmt.Sprintf("%s acess %s", collaboratorResourceType.DisplayName, resource.DisplayName)),
@@ -200,7 +193,14 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToke
 				return nil, "", nil, err
 			}
 
-			newGrant := grant.NewGrant(resource, roleAccessEntitlement, roleID)
+			newGrant := grant.NewGrant(resource, collaboratorAccessEntitlement, roleID, grant.WithAnnotation(
+				&v2.GrantExpandable{
+					EntitlementIds: []string{
+						fmt.Sprintf("role:%s:%s", roleID.Resource, collaboratorHasRoleEntitlement),
+					},
+					Shallow: true,
+				},
+			))
 			rv = append(rv, newGrant)
 		}
 	}
