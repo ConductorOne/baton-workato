@@ -370,8 +370,9 @@ Run test cases`,
 		},
 		"Activity audit": {
 			Privilege{
-				Id:          "all",
-				Description: `Access to view workspace activity in the Dashboard's Activity audit log. This permission grants the user the ability to view all activity logs, regardless of other access settings.`,
+				Id: "all",
+				Description: `Access to view workspace activity in the Dashboard's Activity audit log. This permission grants the user the ability to view all activity logs, regardless of other
+ access settings.`,
 			},
 		},
 		"Collaborator SAML SSO auth": {
@@ -418,8 +419,9 @@ Run test cases`,
 		},
 		"Network trace": {
 			Privilege{
-				Id:          "all",
-				Description: `View network traces in job histories. Includes recipe input, output, and the network trace of HTTP calls. HTTP call information includes HTTP headers, requests, and communication (responses) between Workato and the end application`,
+				Id: "all",
+				Description: `View network traces in job histories. Includes recipe input, output, and the network trace of HTTP calls. HTTP call information includes HTTP headers, requests,
+ and communication (responses) between Workato and the end application`,
 			},
 		},
 	}
