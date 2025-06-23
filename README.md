@@ -12,11 +12,24 @@ Check out [Baton](https://github.com/conductorone/baton) to learn more the proje
 
 ## Prerequisites
 
-You need to pass the workato-api-key:
+You must be an Admin or have a role with access to API Clients.
 
-1. Create an Workato Account.
-2. Create an API KEY https://app.workato.com/members/api/clients.
-3. Run it.
+### Using Workato commercial platform:
+
+Generate an API KEY:
+1. Log in to your Workato account at https://app.workato.com
+2. In the top-right, click your profile icon, then go to *My Account* or *Account Settings*
+3. In the left sidebar, look for *API Clients* or *API Keys*
+4. Click on *+ Create API client* or *+ Generate API key*
+5. Fill out the form:
+   Name: A descriptive name for this client.
+   Description: Optional, but helpful for tracking usage.
+   Scopes or Permissions: Choose what the API key can access (e.g., recipes, jobs, folders).
+6. Click Generate or Create.
+
+After creation:
+    You’ll be shown the raw API key.
+    Save the credentials securely — they will not be shown again.
 
 Obs: if you have a basic account, you can ignore the subusers using.
 

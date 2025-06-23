@@ -62,7 +62,7 @@ func (o *privilegeBuilder) List(ctx context.Context, parentResourceID *v2.Resour
 func (o *privilegeBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
 	assigmentOptions := []entitlement.EntitlementOption{
-		entitlement.WithGrantableTo(collaboratorResourceType),
+		entitlement.WithGrantableTo(collaboratorResourceType, roleResourceType),
 		entitlement.WithDescription(fmt.Sprintf("Assigned %s to scopes", collaboratorResourceType.DisplayName)),
 		entitlement.WithDisplayName(fmt.Sprintf("%s have %s`", collaboratorResourceType.DisplayName, resource.DisplayName)),
 	}
@@ -87,6 +87,7 @@ func (o *privilegeBuilder) Grants(ctx context.Context, resource *v2.Resource, pT
 
 		// Collaborator only have privileges if a role is assigned to them
 		// To update collaborator privileges, the role must be updated
+		// privilege grants for roles implemented in role resource
 		grantToCollaborator := grant.NewGrant(
 			resource,
 			assignedEntitlement,

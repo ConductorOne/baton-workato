@@ -38,8 +38,8 @@ func (d *Connector) Asset(ctx context.Context, asset *v2.AssetRef) (string, io.R
 // Metadata returns metadata about the connector.
 func (d *Connector) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 	return &v2.ConnectorMetadata{
-		DisplayName: "Workato connecotr",
-		Description: "Connector syncing Workato to Baton.",
+		DisplayName: "Workato",
+		Description: "Connector to sync collaborators, project, folders, roles and privileges from Workato.",
 	}, nil
 }
 
