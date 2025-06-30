@@ -36,7 +36,7 @@ builds:
     hooks:
       post:
         - gon .gon-arm64.json
-        - mv dist/baton-workato-darwin-arm64.signed.zip dist/macos-arm64_darwin_arm64/baton-workato
+        - mv dist/baton-workato-darwin-arm64.signed.zip dist/macos-arm64_darwin_arm64_v8.0/baton-workato
 archives:
   - id: linux-archive
     builds:
