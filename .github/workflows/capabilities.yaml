@@ -21,10 +21,10 @@ jobs:
           go-version-file: 'go.mod'
 
       - name: Build
-        run: go build -o connector ./cmd/baton-workato --workato-api-key "api-key-test"
+        run: go build -o connector ./cmd/baton-workato 
 
       - name: Run and save output
-        run: ./connector capabilities > baton_capabilities.json
+        run: ./connector capabilities --workato-api-key "api-key-test" > baton_capabilities.json
 
       - name: Commit changes
         uses: EndBug/add-and-commit@v9
