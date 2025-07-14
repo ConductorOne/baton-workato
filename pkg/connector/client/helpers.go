@@ -80,7 +80,9 @@ func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusBadRequest {
+	// Handle supported API errors https://docs.workato.com/en/workato-api.html#http-response-codes
+	switch resp.StatusCode {
+	case http.StatusNotFound, http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusInternalServerError:
 		return getError(err, resp)
 	}
 
