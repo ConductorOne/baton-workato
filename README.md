@@ -14,6 +14,17 @@ Check out [Baton](https://github.com/conductorone/baton) to learn more the proje
 
 You must be an Admin or have a role with access to API Clients.
 
+### Required Client Role permissions
+
+| Area         | Section              | Action                      | API Endpoint                       |
+|--------------|----------------------|-----------------------------|------------------------------------|
+| **Projects** | Projects & Folders   | List projects               | `GET /api/projects`                |
+|              | Projects & Folders   | List folders                | `GET /api/folders`                 |
+| **Admin**    | Collaborators        | Get collaborators           | `GET /api/members`                 |
+|              | Collaborators        | Get collaborator            | `GET /api/members/:id`             |
+|              | Collaborators        | Update collaborator’s roles | `PUT /api/members/:id`             |
+|              | Collaborators        | Get collaborator privileges | `GET /api/members/:id/privileges`  |
+
 ### Using Workato commercial platform:
 
 Generate an API KEY:
