@@ -34,6 +34,7 @@ func (o *privilegeBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 // Users include a UserTrait because they are the 'shape' of a standard user.
 func (o *privilegeBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
+	l.Debug("Listing privileges")
 
 	if pToken == nil || pToken.Token == "" {
 		err := o.cache.buildCache(ctx)

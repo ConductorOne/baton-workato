@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -21,8 +23,8 @@ func (c *WorkatoClient) GetCollaborators(ctx context.Context) ([]Collaborator, e
 }
 
 func (c *WorkatoClient) GetCollaboratorPrivileges(ctx context.Context, id int) ([]*CollaboratorPrivilege, error) {
+	l := ctxzap.Extract(ctx)
 	var response CommonPagination[*CollaboratorPrivilege]
-
 	pathString := fmt.Sprintf(GetCollaboratorByIdPath, id)
 
 	err := c.doRequest(ctx, http.MethodGet, c.getPath(pathString), &response, nil)
@@ -31,6 +33,7 @@ func (c *WorkatoClient) GetCollaboratorPrivileges(ctx context.Context, id int) (
 	}
 
 	if len(response.Data) != 1 {
+		l.Warn("expected 1 collaborator, got %d. API client may have insufficient permissions", zap.Int("count", len(response.Data)))
 		return nil, status.Errorf(codes.NotFound, "baton-workato: expected 1 collaborator, got %d", len(response.Data))
 	}
 
