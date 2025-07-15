@@ -20,6 +20,7 @@ You must be an Admin or have a role with access to API Clients.
 |--------------|----------------------|-----------------------------|------------------------------------|
 | **Projects** | Projects & Folders   | List projects               | `GET /api/projects`                |
 |              | Projects & Folders   | List folders                | `GET /api/folders`                 |
+|              |                      | List custom roles           | `GET /api/roles`                   |
 | **Admin**    | Collaborators        | Get collaborators           | `GET /api/members`                 |
 |              | Collaborators        | Get collaborator            | `GET /api/members/:id`             |
 |              | Collaborators        | Update collaborator’s roles | `PUT /api/members/:id`             |
