@@ -14,8 +14,9 @@ import (
 )
 
 type Connector struct {
-	client *client.WorkatoClient
-	env    workato.Environment
+	client                 *client.WorkatoClient
+	env                    workato.Environment
+	disableCustomRolesSync bool
 }
 
 // ResourceSyncers returns a ResourceSyncer for each resource type that should be synced from the upstream service.
@@ -23,8 +24,8 @@ func (d *Connector) ResourceSyncers(ctx context.Context) []connectorbuilder.Reso
 	return []connectorbuilder.ResourceSyncer{
 		newCollaboratorBuilder(d.client),
 		newPrivilegeBuilder(d.client, d.env),
-		newRoleBuilder(d.client, d.env),
-		newFolderBuilder(d.client, d.env),
+		newRoleBuilder(d.client, d.env, d.disableCustomRolesSync),
+		newFolderBuilder(d.client, d.env, d.disableCustomRolesSync),
 		newProjectBuilder(d.client),
 	}
 }
@@ -50,9 +51,10 @@ func (d *Connector) Validate(ctx context.Context) (annotations.Annotations, erro
 }
 
 // New returns a new instance of the connector.
-func New(ctx context.Context, workatoClient *client.WorkatoClient, env workato.Environment) (*Connector, error) {
+func New(ctx context.Context, workatoClient *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) (*Connector, error) {
 	return &Connector{
-		client: workatoClient,
-		env:    env,
+		client:                 workatoClient,
+		env:                    env,
+		disableCustomRolesSync: disableCustomRolesSync,
 	}, nil
 }

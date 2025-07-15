@@ -29,6 +29,12 @@ var (
 		field.WithDefaultValue("dev"),
 	)
 
+	DisableCustomRolesSync = field.BoolField(
+		"disable-custom-roles-sync",
+		field.WithDescription("Disable custom roles sync"),
+		field.WithDefaultValue(false),
+	)
+
 	// ConfigurationFields defines the external configuration required for the
 	// connector to run. Note: these fields can be marked as optional or
 	// required.
@@ -36,6 +42,7 @@ var (
 		ApiKeyField,
 		WorkatoDataCenterFiekd,
 		WorkatoEnv,
+		DisableCustomRolesSync,
 	}
 
 	// FieldRelationships defines relationships between the fields listed in

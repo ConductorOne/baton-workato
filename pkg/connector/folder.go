@@ -26,9 +26,10 @@ const (
 )
 
 type folderBuilder struct {
-	client    *client.WorkatoClient
-	cache     *collaboratorCache
-	roleCache *roleCache
+	client                 *client.WorkatoClient
+	cache                  *collaboratorCache
+	roleCache              *roleCache
+	disableCustomRolesSync bool
 }
 
 func (o *folderBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
@@ -214,11 +215,12 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToke
 	return rv, nextToken, nil, nil
 }
 
-func newFolderBuilder(client *client.WorkatoClient, env workato.Environment) *folderBuilder {
+func newFolderBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) *folderBuilder {
 	return &folderBuilder{
-		client:    client,
-		cache:     newCollaboratorCache(client, env),
-		roleCache: newRoleCache(client),
+		client:                 client,
+		cache:                  newCollaboratorCache(client, env),
+		roleCache:              newRoleCache(client),
+		disableCustomRolesSync: disableCustomRolesSync,
 	}
 }
 

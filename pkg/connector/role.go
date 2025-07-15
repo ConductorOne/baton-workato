@@ -22,10 +22,11 @@ var (
 )
 
 type roleBuilder struct {
-	client    *client.WorkatoClient
-	cache     *collaboratorCache
-	roleCache *roleCache
-	env       workato.Environment
+	client                 *client.WorkatoClient
+	cache                  *collaboratorCache
+	roleCache              *roleCache
+	env                    workato.Environment
+	disableCustomRolesSync bool
 }
 
 func (o *roleBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
@@ -268,12 +269,13 @@ func (o *roleBuilder) Revoke(_ context.Context, grant *v2.Grant) (annotations.An
 	return nil, fmt.Errorf("revoke not implemented for %s", grant.Principal.Id.ResourceType)
 }
 
-func newRoleBuilder(client *client.WorkatoClient, env workato.Environment) *roleBuilder {
+func newRoleBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) *roleBuilder {
 	return &roleBuilder{
-		client:    client,
-		cache:     newCollaboratorCache(client, env),
-		roleCache: newRoleCache(client),
-		env:       env,
+		client:                 client,
+		cache:                  newCollaboratorCache(client, env),
+		roleCache:              newRoleCache(client),
+		env:                    env,
+		disableCustomRolesSync: disableCustomRolesSync,
 	}
 }
 
