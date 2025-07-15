@@ -14,6 +14,7 @@ import (
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 )
 
 var (
@@ -21,10 +22,11 @@ var (
 )
 
 type roleBuilder struct {
-	client    *client.WorkatoClient
-	cache     *collaboratorCache
-	roleCache *roleCache
-	env       workato.Environment
+	client                 *client.WorkatoClient
+	cache                  *collaboratorCache
+	roleCache              *roleCache
+	env                    workato.Environment
+	disableCustomRolesSync bool
 }
 
 func (o *roleBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
@@ -34,31 +36,42 @@ func (o *roleBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 // List returns all the users from the database as resource objects.
 // Users include a UserTrait because they are the 'shape' of a standard user.
 func (o *roleBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	l.Debug("Listing roles")
+
 	if pToken.Token == "" {
 		err := o.cache.buildCache(ctx)
 		if err != nil {
 			return nil, "", nil, err
 		}
 
-		err = o.roleCache.buildCache(ctx)
-		if err != nil {
-			return nil, "", nil, err
+		if !o.disableCustomRolesSync {
+			err = o.roleCache.buildCache(ctx)
+			if err != nil {
+				return nil, "", nil, err
+			}
 		}
-	}
-
-	roles, nextToken, err := o.client.GetRoles(ctx, pToken.Token)
-	if err != nil {
-		return nil, "", nil, err
 	}
 
 	rv := make([]*v2.Resource, 0)
 
-	for _, role := range roles {
-		us, err := roleResource(&role)
+	var nextToken string
+
+	if !o.disableCustomRolesSync {
+		var roles []client.Role
+		var err error
+		roles, nextToken, err = o.client.GetRoles(ctx, pToken.Token)
 		if err != nil {
 			return nil, "", nil, err
 		}
-		rv = append(rv, us)
+
+		for _, role := range roles {
+			us, err := roleResource(&role)
+			if err != nil {
+				return nil, "", nil, err
+			}
+			rv = append(rv, us)
+		}
 	}
 
 	// Add base roles
@@ -150,7 +163,7 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken 
 
 			rv = append(rv, newGrant)
 		}
-	} else {
+	} else if !o.disableCustomRolesSync {
 		// privilege grants implementation
 		role := o.roleCache.getRoleById(resource.Id.Resource)
 		if role == nil {
@@ -264,12 +277,13 @@ func (o *roleBuilder) Revoke(_ context.Context, grant *v2.Grant) (annotations.An
 	return nil, fmt.Errorf("revoke not implemented for %s", grant.Principal.Id.ResourceType)
 }
 
-func newRoleBuilder(client *client.WorkatoClient, env workato.Environment) *roleBuilder {
+func newRoleBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) *roleBuilder {
 	return &roleBuilder{
-		client:    client,
-		cache:     newCollaboratorCache(client, env),
-		roleCache: newRoleCache(client),
-		env:       env,
+		client:                 client,
+		cache:                  newCollaboratorCache(client, env),
+		roleCache:              newRoleCache(client),
+		env:                    env,
+		disableCustomRolesSync: disableCustomRolesSync,
 	}
 }
 

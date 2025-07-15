@@ -53,6 +53,7 @@ jobs:
       BATON_WORKATO_API_KEY: ${{ secrets.BATON_WORKATO_API_KEY }}
       BATON_CONNECTOR: ./baton-workato
       BATON_WORKATO_ENV: dev
+      BATON_DISABLE_CUSTOM_ROLES_SYNC: true
 
     steps:
       - name: Install Go

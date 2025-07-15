@@ -62,12 +62,14 @@ func getConnector(ctx context.Context, v *viper.Viper) (types.ConnectorServer, e
 		return nil, err
 	}
 
+	disableCustomRolesSync := v.GetBool(conf.DisableCustomRolesSync.FieldName)
+
 	workatoClient, err := client.NewWorkatoClient(ctx, key, dataCenterUrl)
 	if err != nil {
 		return nil, err
 	}
 
-	cb, err := connector.New(ctx, workatoClient, env)
+	cb, err := connector.New(ctx, workatoClient, env, disableCustomRolesSync)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))
 		return nil, err

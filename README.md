@@ -14,6 +14,18 @@ Check out [Baton](https://github.com/conductorone/baton) to learn more the proje
 
 You must be an Admin or have a role with access to API Clients.
 
+### Required Client Role permissions
+
+| Area         | Section              | Action                      | API Endpoint                       |
+|--------------|----------------------|-----------------------------|------------------------------------|
+| **Projects** | Projects & Folders   | List projects               | `GET /api/projects`                |
+|              | Projects & Folders   | List folders                | `GET /api/folders`                 |
+|              |                      | List custom roles           | `GET /api/roles`                   |
+| **Admin**    | Collaborators        | Get collaborators           | `GET /api/members`                 |
+|              | Collaborators        | Get collaborator            | `GET /api/members/:id`             |
+|              | Collaborators        | Update collaborator’s roles | `PUT /api/members/:id`             |
+|              | Collaborators        | Get collaborator privileges | `GET /api/members/:id/privileges`  |
+
 ### Using Workato commercial platform:
 
 Generate an API KEY:
@@ -91,6 +103,7 @@ Available Commands:
 Flags:
       --client-id string             The client ID used to authenticate with ConductorOne ($BATON_CLIENT_ID)
       --client-secret string         The client secret used to authenticate with ConductorOne ($BATON_CLIENT_SECRET)
+      --disable-custom-roles-sync    Disable custom roles sync ($BATON_DISABLE_CUSTOM_ROLES_SYNC)
   -f, --file string                  The path to the c1z file to sync with ($BATON_FILE) (default "sync.c1z")
   -h, --help                         help for baton-workato
       --log-format string            The output format for logs: json, console ($BATON_LOG_FORMAT) (default "json")

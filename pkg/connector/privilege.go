@@ -34,6 +34,7 @@ func (o *privilegeBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 // Users include a UserTrait because they are the 'shape' of a standard user.
 func (o *privilegeBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
+	l.Debug("Listing privileges")
 
 	if pToken == nil || pToken.Token == "" {
 		err := o.cache.buildCache(ctx)
@@ -62,7 +63,7 @@ func (o *privilegeBuilder) List(ctx context.Context, parentResourceID *v2.Resour
 func (o *privilegeBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
 	assigmentOptions := []entitlement.EntitlementOption{
-		entitlement.WithGrantableTo(collaboratorResourceType, roleResourceType),
+		entitlement.WithGrantableTo(collaboratorResourceType),
 		entitlement.WithDescription(fmt.Sprintf("Assigned %s to scopes", collaboratorResourceType.DisplayName)),
 		entitlement.WithDisplayName(fmt.Sprintf("%s have %s`", collaboratorResourceType.DisplayName, resource.DisplayName)),
 	}

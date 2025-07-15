@@ -26,9 +26,10 @@ const (
 )
 
 type folderBuilder struct {
-	client    *client.WorkatoClient
-	cache     *collaboratorCache
-	roleCache *roleCache
+	client                 *client.WorkatoClient
+	cache                  *collaboratorCache
+	roleCache              *roleCache
+	disableCustomRolesSync bool
 }
 
 func (o *folderBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
@@ -39,6 +40,7 @@ func (o *folderBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 // Users include a UserTrait because they are the 'shape' of a standard user.
 func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
+	l.Debug("Listing folders")
 
 	// Init cache
 	if pToken.Token == "" && parentResourceID == nil {
@@ -47,9 +49,11 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 			return nil, "", nil, err
 		}
 
-		err = o.roleCache.buildCache(ctx)
-		if err != nil {
-			return nil, "", nil, err
+		if !o.disableCustomRolesSync {
+			err = o.roleCache.buildCache(ctx)
+			if err != nil {
+				return nil, "", nil, err
+			}
 		}
 	}
 
@@ -179,7 +183,7 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToke
 		}
 	}
 
-	if state.ResourceTypeID == roleResourceType.Id {
+	if state.ResourceTypeID == roleResourceType.Id && !o.disableCustomRolesSync {
 		folderId, err := strconv.Atoi(resource.Id.Resource)
 		if err != nil {
 			return nil, "", nil, err
@@ -213,11 +217,12 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToke
 	return rv, nextToken, nil, nil
 }
 
-func newFolderBuilder(client *client.WorkatoClient, env workato.Environment) *folderBuilder {
+func newFolderBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) *folderBuilder {
 	return &folderBuilder{
-		client:    client,
-		cache:     newCollaboratorCache(client, env),
-		roleCache: newRoleCache(client),
+		client:                 client,
+		cache:                  newCollaboratorCache(client, env),
+		roleCache:              newRoleCache(client),
+		disableCustomRolesSync: disableCustomRolesSync,
 	}
 }
 
