@@ -51,19 +51,25 @@ func (o *roleBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId,
 		}
 	}
 
-	roles, nextToken, err := o.client.GetRoles(ctx, pToken.Token)
-	if err != nil {
-		return nil, "", nil, err
-	}
-
 	rv := make([]*v2.Resource, 0)
 
-	for _, role := range roles {
-		us, err := roleResource(&role)
+	var nextToken string
+
+	if !o.disableCustomRolesSync {
+		var roles []client.Role
+		var err error
+		roles, nextToken, err = o.client.GetRoles(ctx, pToken.Token)
 		if err != nil {
 			return nil, "", nil, err
 		}
-		rv = append(rv, us)
+
+		for _, role := range roles {
+			us, err := roleResource(&role)
+			if err != nil {
+				return nil, "", nil, err
+			}
+			rv = append(rv, us)
+		}
 	}
 
 	// Add base roles
@@ -155,7 +161,7 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken 
 
 			rv = append(rv, newGrant)
 		}
-	} else {
+	} else if !o.disableCustomRolesSync {
 		// privilege grants implementation
 		role := o.roleCache.getRoleById(resource.Id.Resource)
 		if role == nil {
