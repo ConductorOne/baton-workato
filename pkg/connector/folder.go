@@ -49,9 +49,11 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 			return nil, "", nil, err
 		}
 
-		err = o.roleCache.buildCache(ctx)
-		if err != nil {
-			return nil, "", nil, err
+		if !o.disableCustomRolesSync {
+			err = o.roleCache.buildCache(ctx)
+			if err != nil {
+				return nil, "", nil, err
+			}
 		}
 	}
 
@@ -181,7 +183,7 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToke
 		}
 	}
 
-	if state.ResourceTypeID == roleResourceType.Id {
+	if state.ResourceTypeID == roleResourceType.Id && !o.disableCustomRolesSync {
 		folderId, err := strconv.Atoi(resource.Id.Resource)
 		if err != nil {
 			return nil, "", nil, err
