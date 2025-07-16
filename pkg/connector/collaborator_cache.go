@@ -4,11 +4,13 @@ import (
 	"context"
 	"strconv"
 
-	"github.com/conductorone/baton-workato/pkg/connector/ucache"
-
 	"github.com/conductorone/baton-workato/pkg/connector/client"
+	"github.com/conductorone/baton-workato/pkg/connector/ucache"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type CompoundUser struct {
@@ -52,9 +54,15 @@ func (p *collaboratorCache) buildCache(ctx context.Context) error {
 		return err
 	}
 
+	l.Debug("Building cache for collaborators", zap.Int("count", len(collaborators)))
+
 	for _, collaborator := range collaborators {
 		collaboratorRoles, err := p.client.GetCollaboratorPrivileges(ctx, collaborator.Id)
 		if err != nil {
+			if status.Code(err) == codes.NotFound {
+				l.Warn("Collaborator not found, skipping", zap.Int("collaborator_id", collaborator.Id))
+				continue
+			}
 			return err
 		}
 
