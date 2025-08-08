@@ -10,6 +10,8 @@ import (
 	"net/url"
 
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 )
 
 var (
@@ -30,9 +32,12 @@ func (c *WorkatoClient) getPath(path string) *url.URL {
 	return c.baseUrl.JoinPath(path)
 }
 
-func getError(originalErr error, resp *http.Response) error {
+func getError(ctx context.Context, originalErr error, resp *http.Response) error {
 	bytes, err := io.ReadAll(resp.Body)
 	if err != nil {
+		// We expect the response body to be JSON, according to the Workato API docs, but this is not guaranteed.
+		l := ctxzap.Extract(ctx)
+		l.Debug("failed to read response body", zap.String("body", string(bytes)))
 		return errors.Join(originalErr, err)
 	}
 
@@ -83,7 +88,7 @@ func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress
 	// Handle supported API errors https://docs.workato.com/en/workato-api.html#http-response-codes
 	switch resp.StatusCode {
 	case http.StatusNotFound, http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusInternalServerError:
-		return getError(err, resp)
+		return getError(ctx, err, resp)
 	}
 
 	return nil
