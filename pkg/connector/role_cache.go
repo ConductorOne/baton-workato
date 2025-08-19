@@ -6,6 +6,7 @@ import (
 
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 )
 
 type roleCache struct {
@@ -54,7 +55,7 @@ func (p *roleCache) buildCache(ctx context.Context) error {
 		}
 	}
 
-	l.Info("Cache built for Roles")
+	l.Info("Cache built for Roles", zap.Int("count", len(p.roles)))
 
 	return nil
 }
