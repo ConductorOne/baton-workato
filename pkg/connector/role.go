@@ -12,9 +12,12 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
+	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
 )
 
 var (
@@ -102,6 +105,7 @@ func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ *
 
 // Grants always returns an empty slice for users since they don't have any entitlements.
 func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
 	// Since roles names are unique, we can use the role name as the key to get all the users that have that role.
 	collaborators := o.cache.getUsersByRole(resource.DisplayName)
 
@@ -167,7 +171,8 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken 
 		// privilege grants implementation
 		role := o.roleCache.getRoleById(resource.Id.Resource)
 		if role == nil {
-			return rv, "", nil, fmt.Errorf("role %s not found", resource.DisplayName)
+			l.Warn("role not found", zap.String("role_name", resource.DisplayName), zap.String("role_id", resource.Id.Resource), zap.Any("cache_len", len(o.roleCache.roles)))
+			return rv, "", nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("role %s (%s) not found", resource.DisplayName, resource.Id.Resource))
 		}
 
 		privileges, err := workato.FindRelatedPrivilegesErr(role.Privileges)
