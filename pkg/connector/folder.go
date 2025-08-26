@@ -42,21 +42,6 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 	l := ctxzap.Extract(ctx)
 	l.Debug("Listing folders")
 
-	// Init cache
-	if pToken.Token == "" && parentResourceID == nil {
-		err := o.cache.buildCache(ctx)
-		if err != nil {
-			return nil, "", nil, err
-		}
-
-		if !o.disableCustomRolesSync {
-			err = o.roleCache.buildCache(ctx)
-			if err != nil {
-				return nil, "", nil, err
-			}
-		}
-	}
-
 	rv := make([]*v2.Resource, 0)
 
 	if parentResourceID == nil {
@@ -127,6 +112,16 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToke
 	type Bag struct {
 		ResourceTypeID string
 		Page           int
+	}
+
+	// Ensure caches are initialized
+	if err := o.cache.init(ctx); err != nil {
+		return nil, "", nil, err
+	}
+	if !o.disableCustomRolesSync {
+		if err := o.roleCache.init(ctx); err != nil {
+			return nil, "", nil, err
+		}
 	}
 
 	bag, err := cpagination.GenBagFromToken[Bag](*pToken)

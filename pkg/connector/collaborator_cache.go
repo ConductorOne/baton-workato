@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"strconv"
+	"sync"
 
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/ucache"
@@ -28,6 +29,9 @@ type collaboratorCache struct {
 	folderToUser    *ucache.HashSet[int, string, CompoundUser]
 	roleToUser      *ucache.HashSet[string, string, CompoundUser]
 	env             workato.Environment
+
+	initialized bool
+	mu          sync.Mutex
 }
 
 func newCollaboratorCache(workatoClient *client.WorkatoClient, env workato.Environment) *collaboratorCache {
@@ -40,9 +44,24 @@ func newCollaboratorCache(workatoClient *client.WorkatoClient, env workato.Envir
 	}
 }
 
+func (p *collaboratorCache) init(ctx context.Context) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.initialized {
+		return nil
+	}
+
+	if err := p.buildCache(ctx); err != nil {
+		return err
+	}
+
+	p.initialized = true
+	return nil
+}
+
 func (p *collaboratorCache) buildCache(ctx context.Context) error {
 	l := ctxzap.Extract(ctx)
-
 	l.Info("Building cache for collaborators")
 
 	p.privilegeToUser = ucache.NewUCache[string, string, CompoundUser]()
@@ -102,54 +121,29 @@ func (p *collaboratorCache) buildCache(ctx context.Context) error {
 	}
 
 	l.Info("Cache built for collaborators")
-
 	return nil
 }
 
-// GetAllFoldersRecur is a recursive function that gets all folders in a Workato instance.
-func (p *collaboratorCache) GetAllFoldersRecur(ctx context.Context, parentId *int, pToken string) ([]client.Folder, error) {
-	l := ctxzap.Extract(ctx)
-
-	l.Info("Building cache for folders")
-
-	folders, nextToken, err := p.client.GetFolders(ctx, parentId, pToken)
-	if err != nil {
-		return nil, err
-	}
-
-	response := make([]client.Folder, 0)
-
-	if len(folders) == 0 {
-		return folders, nil
-	} else {
-		recurResult, err := p.GetAllFoldersRecur(ctx, parentId, nextToken)
-		if err != nil {
-			return nil, err
-		}
-
-		response = append(response, recurResult...)
-	}
-
-	for _, folder := range folders {
-		recurResult, err := p.GetAllFoldersRecur(ctx, &folder.Id, "0")
-		if err != nil {
-			return nil, err
-		}
-
-		response = append(response, recurResult...)
-	}
-
-	return response, nil
-}
-
 func (p *collaboratorCache) getUsersByPrivilege(privilegeKey string) []*CompoundUser {
+	if !p.initialized {
+		return nil
+	}
+
 	return p.privilegeToUser.GetAll(privilegeKey)
 }
 
 func (p *collaboratorCache) getUsersByFolder(folderId int) []*CompoundUser {
+	if !p.initialized {
+		return nil
+	}
+
 	return p.folderToUser.GetAll(folderId)
 }
 
 func (p *collaboratorCache) getUsersByRole(roleName string) []*CompoundUser {
+	if !p.initialized {
+		return nil
+	}
+
 	return p.roleToUser.GetAll(roleName)
 }

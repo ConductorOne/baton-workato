@@ -42,20 +42,6 @@ func (o *roleBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId,
 	l := ctxzap.Extract(ctx)
 	l.Debug("Listing roles")
 
-	if pToken.Token == "" {
-		err := o.cache.buildCache(ctx)
-		if err != nil {
-			return nil, "", nil, err
-		}
-
-		if !o.disableCustomRolesSync {
-			err = o.roleCache.buildCache(ctx)
-			if err != nil {
-				return nil, "", nil, err
-			}
-		}
-	}
-
 	rv := make([]*v2.Resource, 0)
 
 	var nextToken string
@@ -106,6 +92,17 @@ func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ *
 // Grants always returns an empty slice for users since they don't have any entitlements.
 func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
+
+	// Ensure caches are initialized
+	if err := o.cache.init(ctx); err != nil {
+		return nil, "", nil, err
+	}
+	if !o.disableCustomRolesSync {
+		if err := o.roleCache.init(ctx); err != nil {
+			return nil, "", nil, err
+		}
+	}
+
 	// Since roles names are unique, we can use the role name as the key to get all the users that have that role.
 	collaborators := o.cache.getUsersByRole(resource.DisplayName)
 
