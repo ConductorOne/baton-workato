@@ -8,7 +8,6 @@ import (
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"go.uber.org/zap"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -35,14 +34,6 @@ func (o *privilegeBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 func (o *privilegeBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 	l.Debug("Listing privileges")
-
-	if pToken == nil || pToken.Token == "" {
-		err := o.cache.init(ctx)
-		if err != nil {
-			l.Error("Error building cache", zap.Error(err))
-			return nil, "", nil, err
-		}
-	}
 
 	privileges := workato.AllCompoundPrivileges()
 
@@ -74,6 +65,11 @@ func (o *privilegeBuilder) Entitlements(_ context.Context, resource *v2.Resource
 
 // Grants always returns an empty slice for users since they don't have any entitlements.
 func (o *privilegeBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
+	// Ensure cache is initialized
+	if err := o.cache.init(ctx); err != nil {
+		return nil, "", nil, err
+	}
+
 	privilegeId := resource.Id.Resource
 
 	users := o.cache.getUsersByPrivilege(privilegeId)
