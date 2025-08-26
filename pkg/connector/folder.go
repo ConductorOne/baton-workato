@@ -44,7 +44,7 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 
 	// Init cache
 	if pToken.Token == "" && parentResourceID == nil {
-		err := o.cache.buildCache(ctx)
+		err := o.cache.init(ctx)
 		if err != nil {
 			return nil, "", nil, err
 		}

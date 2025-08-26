@@ -43,7 +43,7 @@ func (o *roleBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId,
 	l.Debug("Listing roles")
 
 	if pToken.Token == "" {
-		err := o.cache.buildCache(ctx)
+		err := o.cache.init(ctx)
 		if err != nil {
 			return nil, "", nil, err
 		}

@@ -37,7 +37,7 @@ func (o *privilegeBuilder) List(ctx context.Context, parentResourceID *v2.Resour
 	l.Debug("Listing privileges")
 
 	if pToken == nil || pToken.Token == "" {
-		err := o.cache.buildCache(ctx)
+		err := o.cache.init(ctx)
 		if err != nil {
 			l.Error("Error building cache", zap.Error(err))
 			return nil, "", nil, err
