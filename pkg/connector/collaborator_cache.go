@@ -128,42 +128,6 @@ func (p *collaboratorCache) buildCache(ctx context.Context) error {
 	return nil
 }
 
-// GetAllFoldersRecur is a recursive function that gets all folders in a Workato instance.
-func (p *collaboratorCache) GetAllFoldersRecur(ctx context.Context, parentId *int, pToken string) ([]client.Folder, error) {
-	l := ctxzap.Extract(ctx)
-
-	l.Info("Building cache for folders")
-
-	folders, nextToken, err := p.client.GetFolders(ctx, parentId, pToken)
-	if err != nil {
-		return nil, err
-	}
-
-	response := make([]client.Folder, 0)
-
-	if len(folders) == 0 {
-		return folders, nil
-	} else {
-		recurResult, err := p.GetAllFoldersRecur(ctx, parentId, nextToken)
-		if err != nil {
-			return nil, err
-		}
-
-		response = append(response, recurResult...)
-	}
-
-	for _, folder := range folders {
-		recurResult, err := p.GetAllFoldersRecur(ctx, &folder.Id, "0")
-		if err != nil {
-			return nil, err
-		}
-
-		response = append(response, recurResult...)
-	}
-
-	return response, nil
-}
-
 func (p *collaboratorCache) getUsersByPrivilege(privilegeKey string) []*CompoundUser {
 	if !p.initialized {
 		return nil
