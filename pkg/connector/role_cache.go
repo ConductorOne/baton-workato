@@ -28,10 +28,6 @@ func newRoleCache(workatoClient *client.WorkatoClient) *roleCache {
 }
 
 func (p *roleCache) init(ctx context.Context) error {
-	if p.initialized {
-		return nil
-	}
-
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

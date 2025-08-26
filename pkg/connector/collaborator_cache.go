@@ -45,10 +45,6 @@ func newCollaboratorCache(workatoClient *client.WorkatoClient, env workato.Envir
 }
 
 func (p *collaboratorCache) init(ctx context.Context) error {
-	if p.initialized {
-		return nil
-	}
-
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
