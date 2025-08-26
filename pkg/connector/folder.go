@@ -50,7 +50,7 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 		}
 
 		if !o.disableCustomRolesSync {
-			err = o.roleCache.buildCache(ctx)
+			err = o.roleCache.init(ctx)
 			if err != nil {
 				return nil, "", nil, err
 			}
@@ -135,6 +135,10 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToke
 	}
 
 	if bag.Current() == nil {
+		err := o.cache.init(ctx)
+		if err != nil {
+			return nil, "", nil, err
+		}
 		bag.Push(Bag{
 			ResourceTypeID: collaboratorResourceType.Id,
 			Page:           0,

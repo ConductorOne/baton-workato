@@ -49,7 +49,7 @@ func (o *roleBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId,
 		}
 
 		if !o.disableCustomRolesSync {
-			err = o.roleCache.buildCache(ctx)
+			err = o.roleCache.init(ctx)
 			if err != nil {
 				return nil, "", nil, err
 			}
