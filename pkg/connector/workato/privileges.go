@@ -3,6 +3,9 @@ package workato
 import (
 	"fmt"
 	"slices"
+
+	"github.com/conductorone/baton-sdk/pkg/uhttp"
+	"google.golang.org/grpc/codes"
 )
 
 type Privilege struct {
@@ -456,7 +459,7 @@ func FindRelatedPrivilegesErr(param map[string][]string) ([]CompoundPrivilege, e
 			resource, ok := Privileges[key]
 
 			if !ok {
-				return nil, fmt.Errorf("invalid resource")
+				return nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("baton-workato invalid resource '%s'", key))
 			}
 
 			for _, value := range values {
@@ -465,12 +468,12 @@ func FindRelatedPrivilegesErr(param map[string][]string) ([]CompoundPrivilege, e
 				})
 
 				if index < 0 {
-					return nil, fmt.Errorf("privilege '%s-%s' not found", key, value)
+					return nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("baton-workato privilege '%s-%s' not found", key, value))
 				}
 			}
 		}
 
-		return nil, fmt.Errorf("invalid privileges")
+		return nil, uhttp.WrapErrors(codes.PermissionDenied, "baton-workato invalid privileges")
 	}
 
 	return reference, nil

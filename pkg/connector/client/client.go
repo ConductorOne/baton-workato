@@ -3,10 +3,12 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"google.golang.org/grpc/codes"
 )
 
 var (
@@ -33,21 +35,21 @@ type WorkatoClient struct {
 func NewWorkatoClient(ctx context.Context, apiKey, baseUrl string) (*WorkatoClient, error) {
 	parseBaseUrl, err := url.Parse(baseUrl)
 	if err != nil {
-		return nil, err
+		return nil, uhttp.WrapErrors(codes.InvalidArgument, "baton-workato: failed to parse base URL", err)
 	}
 
 	if apiKey == "" {
-		return nil, ErrApiKeyIsEmpty
+		return nil, uhttp.WrapErrors(codes.InvalidArgument, "baton-workato: failed to validate API key", ErrApiKeyIsEmpty)
 	}
 
 	httpClient, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, ctxzap.Extract(ctx)))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("baton-workato: failed to create HTTP client: %w", err)
 	}
 
 	uhttpClient, err := uhttp.NewBaseHttpClientWithContext(ctx, httpClient)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("baton-workato: failed to create base HTTP client: %w", err)
 	}
 
 	return &WorkatoClient{
