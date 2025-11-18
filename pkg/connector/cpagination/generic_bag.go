@@ -83,7 +83,7 @@ func (pb *GenBag[T]) Unmarshal(input string) error {
 	if input != "" {
 		err := json.Unmarshal([]byte(input), &target)
 		if err != nil {
-			return fmt.Errorf("page token corrupt: %w", err)
+			return fmt.Errorf("baton-workato failed to unmarshal pagination token for generic bag: %w", err)
 		}
 
 		pb.states = target.States

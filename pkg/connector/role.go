@@ -272,11 +272,11 @@ func (o *roleBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlem
 		return grants, nil, nil
 	}
 
-	return nil, nil, fmt.Errorf("grant not implemented for %s", resource.Id.ResourceType)
+	return nil, nil, fmt.Errorf("baton-workato grant not implemented for resource type %s", resource.Id.ResourceType)
 }
 
 func (o *roleBuilder) Revoke(_ context.Context, grant *v2.Grant) (annotations.Annotations, error) {
-	return nil, fmt.Errorf("revoke not implemented for %s", grant.Principal.Id.ResourceType)
+	return nil, fmt.Errorf("baton-workato revoke not implemented for resource type %s", grant.Principal.Id.ResourceType)
 }
 
 func newRoleBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) *roleBuilder {

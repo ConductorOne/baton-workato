@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -15,7 +16,7 @@ func (c *WorkatoClient) GetProjects(ctx context.Context, pToken string) ([]Proje
 	if pToken != "" {
 		page, err = strconv.Atoi(pToken)
 		if err != nil {
-			return nil, "", ErrInvalidPaginationToken
+			return nil, "", errors.Join(ErrInvalidPaginationToken, err)
 		}
 	}
 

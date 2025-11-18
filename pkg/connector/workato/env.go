@@ -1,6 +1,11 @@
 package workato
 
-import "errors"
+import (
+	"fmt"
+
+	"github.com/conductorone/baton-sdk/pkg/uhttp"
+	"google.golang.org/grpc/codes"
+)
 
 type Environment string
 
@@ -23,6 +28,6 @@ func EnvFromString(env string) (Environment, error) {
 	case Development.String():
 		return Development, nil
 	default:
-		return "", errors.New("invalid environment")
+		return "", uhttp.WrapErrors(codes.InvalidArgument, fmt.Sprintf("baton-workato invalid environment '%s', must be one of: prod, test, dev", env))
 	}
 }
