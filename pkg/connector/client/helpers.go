@@ -100,10 +100,10 @@ func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress
 
 	if resp == nil {
 		if err != nil {
-			return uhttp.WrapErrors(codes.Unavailable, "baton-workato: HTTP request failed to Workato API", err)
+			return err
 		}
 
-		return uhttp.WrapErrors(codes.Unavailable, "baton-workato doRequest: response is nil with no error, this should never happen")
+		return uhttp.WrapErrors(codes.Internal, "baton-workato doRequest: response is nil with no error, this should never happen")
 	}
 
 	defer resp.Body.Close()
