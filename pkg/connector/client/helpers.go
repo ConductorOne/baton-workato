@@ -48,7 +48,7 @@ func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress
 	var options []uhttp.DoOption
 
 	if res != nil {
-		options = append(options, uhttp.WithResponse(&res))
+		options = append(options, uhttp.WithResponse(&res), uhttp.WithErrorResponse(&ApiError{}))
 	}
 
 	resp, err = c.httpClient.Do(req, options...)

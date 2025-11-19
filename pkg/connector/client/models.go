@@ -1,9 +1,20 @@
 package client
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 type ApiError struct {
-	Message string `json:"message"`
+	Msg *string `json:"message"`
+}
+
+// Message implements the error interface.
+func (e *ApiError) Message() string {
+	if e.Msg != nil {
+		return fmt.Sprintf("message: %s", *e.Msg)
+	}
+	return "unknown error"
 }
 
 type CommonPagination[T any] struct {
