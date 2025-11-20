@@ -16,8 +16,6 @@ import (
 	"github.com/conductorone/baton-workato/pkg/connector/cpagination"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
-	"github.com/conductorone/baton-sdk/pkg/annotations"
-	"github.com/conductorone/baton-sdk/pkg/pagination"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 )
 
@@ -38,63 +36,67 @@ func (o *folderBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 
 // List returns all the users from the database as resource objects.
 // Users include a UserTrait because they are the 'shape' of a standard user.
-func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
+func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
 	l := ctxzap.Extract(ctx)
 	l.Debug("Listing folders")
 
 	rv := make([]*v2.Resource, 0)
 
 	if parentResourceID == nil {
-		return nil, "", nil, nil
+		return nil, nil, nil
 	}
 
 	if parentResourceID.ResourceType == projectResourceType.Id {
-		projects, nextToken, err := o.client.GetProjects(ctx, pToken.Token)
+		projects, nextToken, err := o.client.GetProjects(ctx, attr.PageToken.Token)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
 		for _, project := range projects {
 			// Create a resource for the project
 			projectRs, err := projectFolderResource(&project, parentResourceID)
 			if err != nil {
-				return nil, "", nil, err
+				return nil, nil, err
 			}
 
 			rv = append(rv, projectRs)
 		}
 
-		return rv, nextToken, nil, err
+		return rv, &rs.SyncOpResults{
+			NextPageToken: nextToken,
+		}, nil
 	}
 
 	if parentResourceID.ResourceType == folderResourceType.Id {
 		parentId, err := strconv.Atoi(parentResourceID.Resource)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
-		folders, nextToken, err := o.client.GetFolders(ctx, &parentId, pToken.Token)
+		folders, nextToken, err := o.client.GetFolders(ctx, &parentId, attr.PageToken.Token)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
 		for _, folder := range folders {
 			us, err := folderResource(&folder, parentResourceID)
 			if err != nil {
-				return nil, "", nil, err
+				return nil, nil, err
 			}
 			rv = append(rv, us)
 		}
 
-		return rv, nextToken, nil, nil
+		return rv, &rs.SyncOpResults{
+			NextPageToken: nextToken,
+		}, nil
 	}
 
 	l.Warn("Unknown parent resource type", zap.String("parent_resource_type", parentResourceID.ResourceType))
-	return nil, "", nil, nil
+	return nil, nil, nil
 }
 
 // Entitlements always returns an empty slice for users.
-func (o *folderBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
+func (o *folderBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ rs.SyncOpAttrs) ([]*v2.Entitlement, *rs.SyncOpResults, error) {
 	var rv []*v2.Entitlement
 
 	assigmentOptions := []entitlement.EntitlementOption{
@@ -104,11 +106,11 @@ func (o *folderBuilder) Entitlements(_ context.Context, resource *v2.Resource, _
 	}
 	rv = append(rv, entitlement.NewPermissionEntitlement(resource, collaboratorAccessEntitlement, assigmentOptions...))
 
-	return rv, "", nil, nil
+	return rv, nil, nil
 }
 
 // Grants always returns an empty slice for users since they don't have any entitlements.
-func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
+func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
 	type Bag struct {
 		ResourceTypeID string
 		Page           int
@@ -116,17 +118,17 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToke
 
 	// Ensure caches are initialized
 	if err := o.cache.init(ctx); err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 	if !o.disableCustomRolesSync {
 		if err := o.roleCache.init(ctx); err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 	}
 
-	bag, err := cpagination.GenBagFromToken[Bag](*pToken)
+	bag, err := cpagination.GenBagFromToken[Bag](attr.PageToken)
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
 	if bag.Current() == nil {
@@ -142,10 +144,12 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToke
 
 		nextToken, err := bag.Marshal()
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
-		return nil, nextToken, nil, nil
+		return nil, &rs.SyncOpResults{
+			NextPageToken: nextToken,
+		}, nil
 	}
 
 	state := bag.Pop()
@@ -155,7 +159,7 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToke
 	if state.ResourceTypeID == collaboratorResourceType.Id {
 		folderId, err := strconv.Atoi(resource.Id.Resource)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
 		collaborators := o.cache.getUsersByFolder(folderId)
@@ -163,7 +167,7 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToke
 		for _, collaborator := range collaborators {
 			collaboratorId, err := rs.NewResourceID(collaboratorResourceType, collaborator.User.Id)
 			if err != nil {
-				return nil, "", nil, err
+				return nil, nil, err
 			}
 
 			// Collaborator only access to the folder if a role have access
@@ -181,7 +185,7 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToke
 	if state.ResourceTypeID == roleResourceType.Id && !o.disableCustomRolesSync {
 		folderId, err := strconv.Atoi(resource.Id.Resource)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
 		roles := o.roleCache.getRoleByFolder(folderId)
@@ -189,7 +193,7 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToke
 		for _, role := range roles {
 			roleID, err := rs.NewResourceID(roleResourceType, role.Id)
 			if err != nil {
-				return nil, "", nil, err
+				return nil, nil, err
 			}
 
 			newGrant := grant.NewGrant(resource, collaboratorAccessEntitlement, roleID, grant.WithAnnotation(
@@ -206,10 +210,12 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, pToke
 
 	nextToken, err := bag.Marshal()
 	if err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 
-	return rv, nextToken, nil, nil
+	return rv, &rs.SyncOpResults{
+		NextPageToken: nextToken,
+	}, nil
 }
 
 func newFolderBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) *folderBuilder {

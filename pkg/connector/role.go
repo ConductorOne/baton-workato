@@ -8,7 +8,6 @@ import (
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
-	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
@@ -38,7 +37,7 @@ func (o *roleBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 
 // List returns all the users from the database as resource objects.
 // Users include a UserTrait because they are the 'shape' of a standard user.
-func (o *roleBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
+func (o *roleBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
 	l := ctxzap.Extract(ctx)
 	l.Debug("Listing roles")
 
@@ -49,15 +48,15 @@ func (o *roleBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId,
 	if !o.disableCustomRolesSync {
 		var roles []client.Role
 		var err error
-		roles, nextToken, err = o.client.GetRoles(ctx, pToken.Token)
+		roles, nextToken, err = o.client.GetRoles(ctx, attr.PageToken.Token)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
 		for _, role := range roles {
 			us, err := roleResource(&role)
 			if err != nil {
-				return nil, "", nil, err
+				return nil, nil, err
 			}
 			rv = append(rv, us)
 		}
@@ -67,17 +66,19 @@ func (o *roleBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId,
 	for _, role := range workato.BaseRoles {
 		us, err := workatoBaseRoleResource(&role)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
 		rv = append(rv, us)
 	}
 
-	return rv, nextToken, nil, nil
+	return rv, &rs.SyncOpResults{
+		NextPageToken: nextToken,
+	}, nil
 }
 
 // Entitlements always returns an empty slice for users.
-func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
+func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ rs.SyncOpAttrs) ([]*v2.Entitlement, *rs.SyncOpResults, error) {
 	var rv []*v2.Entitlement
 	assigmentOptions := []entitlement.EntitlementOption{
 		entitlement.WithGrantableTo(collaboratorResourceType),
@@ -86,20 +87,20 @@ func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ *
 	}
 	rv = append(rv, entitlement.NewAssignmentEntitlement(resource, collaboratorHasRoleEntitlement, assigmentOptions...))
 
-	return rv, "", nil, nil
+	return rv, nil, nil
 }
 
 // Grants always returns an empty slice for users since they don't have any entitlements.
-func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
+func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, _ rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
 	l := ctxzap.Extract(ctx)
 
 	// Ensure caches are initialized
 	if err := o.cache.init(ctx); err != nil {
-		return nil, "", nil, err
+		return nil, nil, err
 	}
 	if !o.disableCustomRolesSync {
 		if err := o.roleCache.init(ctx); err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -111,7 +112,7 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken 
 	for _, collaborator := range collaborators {
 		collaboratorId, err := rs.NewResourceID(collaboratorResourceType, collaborator.User.Id)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
 		for _, roleCollab := range collaborator.User.Roles {
@@ -136,13 +137,13 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken 
 	if workato.IsBaseRole(resource.DisplayName) {
 		role, err := workato.GetBaseRole(resource.DisplayName)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
 		for _, privilege := range role.Privileges {
 			privilegeId, err := rs.NewResourceID(privilegeResourceType, privilege.Id())
 			if err != nil {
-				return nil, "", nil, err
+				return nil, nil, err
 			}
 
 			newGrant := grant.NewGrant(
@@ -169,18 +170,18 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken 
 		role := o.roleCache.getRoleById(resource.Id.Resource)
 		if role == nil {
 			l.Warn("role not found", zap.String("role_name", resource.DisplayName), zap.String("role_id", resource.Id.Resource), zap.Any("cache_len", len(o.roleCache.roles)))
-			return rv, "", nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("role %s (%s) not found", resource.DisplayName, resource.Id.Resource))
+			return rv, nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("role %s (%s) not found", resource.DisplayName, resource.Id.Resource))
 		}
 
 		privileges, err := workato.FindRelatedPrivilegesErr(role.Privileges)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
 		for _, privilege := range privileges {
 			privilegeId, err := rs.NewResourceID(privilegeResourceType, privilege.Id())
 			if err != nil {
-				return nil, "", nil, err
+				return nil, nil, err
 			}
 
 			newGrant := grant.NewGrant(
@@ -203,7 +204,7 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken 
 		}
 	}
 
-	return rv, "", nil, nil
+	return rv, nil, nil
 }
 
 func (o *roleBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlement *v2.Entitlement) ([]*v2.Grant, annotations.Annotations, error) {
