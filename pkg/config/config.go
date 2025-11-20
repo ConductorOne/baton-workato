@@ -1,37 +1,36 @@
-package conf
+package config
 
 import (
-	"errors"
-
-	"github.com/conductorone/baton-workato/pkg/connector/workato"
-
 	"github.com/conductorone/baton-sdk/pkg/field"
-	"github.com/conductorone/baton-workato/pkg/connector/client"
-	"github.com/spf13/viper"
 )
 
 var (
 	ApiKeyField = field.StringField(
 		"workato-api-key",
 		field.WithRequired(true),
+		field.WithDisplayName("API key"),
 		field.WithDescription("Your workato API key"),
+		field.WithIsSecret(true),
 	)
 
 	WorkatoDataCenterFiekd = field.StringField(
 		"workato-data-center",
+		field.WithDisplayName("Data center"),
 		field.WithDescription("Your workato data center (us, eu, jp, sg, au) default is 'us' see more on https://docs.workato.com/workato-api.html#base-url"),
 		field.WithDefaultValue("us"),
 	)
 
 	WorkatoEnv = field.StringField(
 		"workato-env",
+		field.WithDisplayName("Environment"),
 		field.WithDescription("Your workato environment (dev, test, prod) default is 'dev'"),
 		field.WithDefaultValue("dev"),
 	)
 
 	DisableCustomRolesSync = field.BoolField(
 		"disable-custom-roles-sync",
-		field.WithDescription("Disable custom roles sync"),
+		field.WithDisplayName("Disable custom roles sync"),
+		field.WithDescription("Whether to disable custom roles sync or not"),
 		field.WithDefaultValue(false),
 	)
 
@@ -52,19 +51,11 @@ var (
 	FieldRelationships = []field.SchemaFieldRelationship{}
 )
 
-// ValidateConfig is run after the configuration is loaded, and should return an
-// error if it isn't valid. Implementing this function is optional, it only
-// needs to perform extra validations that cannot be encoded with configuration
-// parameters.
-func ValidateConfig(v *viper.Viper) error {
-	if _, ok := client.WorkatoDataCenters[v.GetString(WorkatoDataCenterFiekd.FieldName)]; !ok {
-		return errors.New("invalid workato data center")
-	}
-
-	_, err := workato.EnvFromString(v.GetString(WorkatoEnv.FieldName))
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
+//go:generate go run ./gen
+var Config = field.NewConfiguration(
+	ConfigurationFields,
+	field.WithConstraints(FieldRelationships...),
+	field.WithConnectorDisplayName("Wrokato"),
+	field.WithHelpUrl("/docs/baton/workato"),
+	field.WithIconUrl("/static/app-icons/workato.svg"),
+)

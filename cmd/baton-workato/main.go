@@ -7,17 +7,15 @@ import (
 
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
 
-	"github.com/conductorone/baton-workato/cmd/baton-workato/conf"
-
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 
 	"github.com/conductorone/baton-sdk/pkg/config"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/field"
 	"github.com/conductorone/baton-sdk/pkg/types"
+	cfg "github.com/conductorone/baton-workato/pkg/config"
 	"github.com/conductorone/baton-workato/pkg/connector"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
@@ -30,9 +28,7 @@ func main() {
 		ctx,
 		"baton-workato",
 		getConnector,
-		field.Configuration{
-			Fields: conf.ConfigurationFields,
-		},
+		cfg.Config,
 	)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
@@ -48,28 +44,26 @@ func main() {
 	}
 }
 
-func getConnector(ctx context.Context, v *viper.Viper) (types.ConnectorServer, error) {
+func getConnector(ctx context.Context, wc *cfg.Workato) (types.ConnectorServer, error) {
 	l := ctxzap.Extract(ctx)
-	if err := conf.ValidateConfig(v); err != nil {
+	err := field.Validate(cfg.Config, wc)
+	if err != nil {
 		return nil, err
 	}
+	
+	dataCenterUrl := client.WorkatoDataCenters[wc.WorkatoDataCenter]
 
-	key := v.GetString(conf.ApiKeyField.FieldName)
-	dataCenterUrl := client.WorkatoDataCenters[v.GetString(conf.WorkatoDataCenterFiekd.FieldName)]
-
-	env, err := workato.EnvFromString(v.GetString(conf.WorkatoEnv.FieldName))
+	env, err := workato.EnvFromString(wc.WorkatoEnv)
 	if err != nil {
 		return nil, err
 	}
 
-	disableCustomRolesSync := v.GetBool(conf.DisableCustomRolesSync.FieldName)
-
-	workatoClient, err := client.NewWorkatoClient(ctx, key, dataCenterUrl)
+	workatoClient, err := client.NewWorkatoClient(ctx, wc.WorkatoApiKey, dataCenterUrl)
 	if err != nil {
 		return nil, err
 	}
 
-	cb, err := connector.New(ctx, workatoClient, env, disableCustomRolesSync)
+	cb, err := connector.New(ctx, workatoClient, env, wc.DisableCustomRolesSync)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))
 		return nil, err
