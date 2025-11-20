@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/conductorone/baton-workato/pkg/connector/workato"
-
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 
@@ -26,7 +24,6 @@ const (
 type folderBuilder struct {
 	client                 *client.WorkatoClient
 	cache                  *collaboratorCache
-	roleCache              *roleCache
 	disableCustomRolesSync bool
 }
 
@@ -116,16 +113,6 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, attr 
 		Page           int
 	}
 
-	// Ensure caches are initialized
-	if err := o.cache.init(ctx); err != nil {
-		return nil, nil, err
-	}
-	if !o.disableCustomRolesSync {
-		if err := o.roleCache.init(ctx); err != nil {
-			return nil, nil, err
-		}
-	}
-
 	bag, err := cpagination.GenBagFromToken[Bag](attr.PageToken)
 	if err != nil {
 		return nil, nil, err
@@ -157,12 +144,8 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, attr 
 	var rv []*v2.Grant
 
 	if state.ResourceTypeID == collaboratorResourceType.Id {
-		folderId, err := strconv.Atoi(resource.Id.Resource)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		collaborators := o.cache.getUsersByFolder(folderId)
+		folderId := resource.Id.Resource
+		collaborators := getUsersByFolder(ctx, attr.Session, folderId)
 
 		for _, collaborator := range collaborators {
 			collaboratorId, err := rs.NewResourceID(collaboratorResourceType, collaborator.User.Id)
@@ -183,12 +166,8 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, attr 
 	}
 
 	if state.ResourceTypeID == roleResourceType.Id && !o.disableCustomRolesSync {
-		folderId, err := strconv.Atoi(resource.Id.Resource)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		roles := o.roleCache.getRoleByFolder(folderId)
+		folderId := resource.Id.Resource
+		roles := getRoleByFolder(ctx, attr.Session, folderId)
 
 		for _, role := range roles {
 			roleID, err := rs.NewResourceID(roleResourceType, role.Id)
@@ -218,11 +197,9 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, attr 
 	}, nil
 }
 
-func newFolderBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) *folderBuilder {
+func newFolderBuilder(client *client.WorkatoClient, disableCustomRolesSync bool) *folderBuilder {
 	return &folderBuilder{
 		client:                 client,
-		cache:                  newCollaboratorCache(client, env),
-		roleCache:              newRoleCache(client),
 		disableCustomRolesSync: disableCustomRolesSync,
 	}
 }

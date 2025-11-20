@@ -5,6 +5,7 @@ import (
 
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
+	"github.com/conductorone/baton-workato/pkg/connector/workato"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 
@@ -13,6 +14,7 @@ import (
 
 type collaboratorBuilder struct {
 	client *client.WorkatoClient
+	cache *collaboratorCache
 }
 
 func (o *collaboratorBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
@@ -21,7 +23,7 @@ func (o *collaboratorBuilder) ResourceType(ctx context.Context) *v2.ResourceType
 
 // List returns all the users from the database as resource objects.
 // Users include a UserTrait because they are the 'shape' of a standard user.
-func (o *collaboratorBuilder) List(ctx context.Context, _ *v2.ResourceId, _ resource.SyncOpAttrs) ([]*v2.Resource, *resource.SyncOpResults, error) {
+func (o *collaboratorBuilder) List(ctx context.Context, _ *v2.ResourceId, attr resource.SyncOpAttrs) ([]*v2.Resource, *resource.SyncOpResults, error) {
 	l := ctxzap.Extract(ctx)
 	l.Debug("Listing collaborators")
 
@@ -29,6 +31,9 @@ func (o *collaboratorBuilder) List(ctx context.Context, _ *v2.ResourceId, _ reso
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// Set collaborators cache
+	o.cache.setCollaboratorsCache(ctx, attr.Session, collaborators)
 
 	rv := make([]*v2.Resource, len(collaborators))
 
@@ -53,9 +58,10 @@ func (o *collaboratorBuilder) Grants(_ context.Context, _ *v2.Resource, _ resour
 	return nil, nil, nil
 }
 
-func newCollaboratorBuilder(client *client.WorkatoClient) *collaboratorBuilder {
+func newCollaboratorBuilder(client *client.WorkatoClient, env workato.Environment) *collaboratorBuilder {
 	return &collaboratorBuilder{
 		client: client,
+		cache:  newCollaboratorCache(client, env),
 	}
 }
 

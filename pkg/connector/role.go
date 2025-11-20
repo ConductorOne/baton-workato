@@ -25,8 +25,6 @@ var (
 
 type roleBuilder struct {
 	client                 *client.WorkatoClient
-	cache                  *collaboratorCache
-	roleCache              *roleCache
 	env                    workato.Environment
 	disableCustomRolesSync bool
 }
@@ -52,6 +50,9 @@ func (o *roleBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOp
 		if err != nil {
 			return nil, nil, err
 		}
+
+		//cache roles
+		setRolesCache(ctx, attr.Session, roles)
 
 		for _, role := range roles {
 			us, err := roleResource(&role)
@@ -91,21 +92,11 @@ func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ r
 }
 
 // Grants always returns an empty slice for users since they don't have any entitlements.
-func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, _ rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
+func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
 	l := ctxzap.Extract(ctx)
 
-	// Ensure caches are initialized
-	if err := o.cache.init(ctx); err != nil {
-		return nil, nil, err
-	}
-	if !o.disableCustomRolesSync {
-		if err := o.roleCache.init(ctx); err != nil {
-			return nil, nil, err
-		}
-	}
-
 	// Since roles names are unique, we can use the role name as the key to get all the users that have that role.
-	collaborators := o.cache.getUsersByRole(resource.DisplayName)
+	collaborators := getUsersByRole(ctx, attr.Session, resource.DisplayName)
 
 	rv := make([]*v2.Grant, 0)
 
@@ -167,9 +158,9 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, _ rs.Sy
 		}
 	} else if !o.disableCustomRolesSync {
 		// privilege grants implementation
-		role := o.roleCache.getRoleById(resource.Id.Resource)
+		role := getRoleById(ctx, attr.Session, resource.Id.Resource)
 		if role == nil {
-			l.Warn("role not found", zap.String("role_name", resource.DisplayName), zap.String("role_id", resource.Id.Resource), zap.Any("cache_len", len(o.roleCache.roles)))
+			l.Warn("role not found", zap.String("role_name", resource.DisplayName), zap.String("role_id", resource.Id.Resource))
 			return rv, nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("role %s (%s) not found", resource.DisplayName, resource.Id.Resource))
 		}
 
@@ -283,8 +274,6 @@ func (o *roleBuilder) Revoke(_ context.Context, grant *v2.Grant) (annotations.An
 func newRoleBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) *roleBuilder {
 	return &roleBuilder{
 		client:                 client,
-		cache:                  newCollaboratorCache(client, env),
-		roleCache:              newRoleCache(client),
 		env:                    env,
 		disableCustomRolesSync: disableCustomRolesSync,
 	}

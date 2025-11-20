@@ -2,11 +2,12 @@ package connector
 
 import (
 	"context"
+	"fmt"
 	"strconv"
-	"sync"
 
+	"github.com/conductorone/baton-sdk/pkg/session"
+	"github.com/conductorone/baton-sdk/pkg/types/sessions"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
-	"github.com/conductorone/baton-workato/pkg/connector/ucache"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
@@ -24,59 +25,76 @@ func (c *CompoundUser) Id() string {
 }
 
 type collaboratorCache struct {
-	client          *client.WorkatoClient
-	privilegeToUser *ucache.HashSet[string, string, CompoundUser]
-	folderToUser    *ucache.HashSet[int, string, CompoundUser]
-	roleToUser      *ucache.HashSet[string, string, CompoundUser]
-	env             workato.Environment
-
-	initialized bool
-	mu          sync.Mutex
+	client *client.WorkatoClient
+	env    workato.Environment
 }
 
 func newCollaboratorCache(workatoClient *client.WorkatoClient, env workato.Environment) *collaboratorCache {
 	return &collaboratorCache{
-		client:          workatoClient,
-		privilegeToUser: ucache.NewUCache[string, string, CompoundUser](),
-		folderToUser:    ucache.NewUCache[int, string, CompoundUser](),
-		roleToUser:      ucache.NewUCache[string, string, CompoundUser](),
-		env:             env,
+		client: workatoClient,
+		env:    env,
 	}
 }
 
-func (p *collaboratorCache) init(ctx context.Context) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+const (
+	privilegeToUserCachePrefix = "privilege_to_user"
+	folderToUserCachePrefix    = "folder_to_user"
+	roleToUserCachePrefix      = "role_to_user"
+)
 
-	if p.initialized {
+func getUsersByPrivilege(ctx context.Context, sessionStorage sessions.SessionStore, privilegeKey string) []*CompoundUser {
+	l := ctxzap.Extract(ctx)
+
+	users, found, err := session.GetJSON[[]*CompoundUser](ctx, sessionStorage, privilegeKey, sessions.WithPrefix(privilegeToUserCachePrefix))
+	if err != nil {
+		l.Error("failed to get users by privilege from session storage", zap.Error(err))
 		return nil
 	}
 
-	if err := p.buildCache(ctx); err != nil {
-		return err
+	if !found {
+		return nil
 	}
 
-	p.initialized = true
-	return nil
+	return users
 }
 
-func (p *collaboratorCache) buildCache(ctx context.Context) error {
+func getUsersByFolder(ctx context.Context, sessionStorage sessions.SessionStore, folderId string) []*CompoundUser {
 	l := ctxzap.Extract(ctx)
-	l.Info("Building cache for collaborators")
 
-	p.privilegeToUser = ucache.NewUCache[string, string, CompoundUser]()
-	p.folderToUser = ucache.NewUCache[int, string, CompoundUser]()
-	p.roleToUser = ucache.NewUCache[string, string, CompoundUser]()
-
-	collaborators, err := p.client.GetCollaborators(ctx)
+	users, found, err := session.GetJSON[[]*CompoundUser](ctx, sessionStorage, folderId, sessions.WithPrefix(folderToUserCachePrefix))
 	if err != nil {
-		return err
+		l.Error("failed to get users by folder from session storage", zap.Error(err))
+		return nil
 	}
 
-	l.Debug("Building cache for collaborators", zap.Int("count", len(collaborators)))
+	if !found {
+		return nil
+	}
+
+	return users
+}
+
+func getUsersByRole(ctx context.Context, sessionStorage sessions.SessionStore, roleName string) []*CompoundUser {
+	l := ctxzap.Extract(ctx)
+
+	users, found, err := session.GetJSON[[]*CompoundUser](ctx, sessionStorage, roleName, sessions.WithPrefix(roleToUserCachePrefix))
+	if err != nil {
+		l.Error("failed to get users by role from session storage", zap.Error(err))
+		return nil
+	}
+
+	if !found {
+		return nil
+	}
+
+	return users
+}
+
+func (c *collaboratorCache) setCollaboratorsCache(ctx context.Context, sessionStorage sessions.SessionStore, collaborators []client.Collaborator) error {
+	l := ctxzap.Extract(ctx)
 
 	for _, collaborator := range collaborators {
-		collaboratorRoles, err := p.client.GetCollaboratorPrivileges(ctx, collaborator.Id)
+		collaboratorRoles, err := c.client.GetCollaboratorPrivileges(ctx, collaborator.Id)
 		if err != nil {
 			if status.Code(err) == codes.NotFound {
 				l.Warn("Collaborator not found, skipping", zap.Int("collaborator_id", collaborator.Id))
@@ -91,7 +109,7 @@ func (p *collaboratorCache) buildCache(ctx context.Context) error {
 		}
 
 		for _, collaboratorRole := range collaboratorRoles {
-			if collaboratorRole.EnvironmentType != p.env.String() {
+			if collaboratorRole.EnvironmentType != c.env.String() {
 				continue
 			}
 
@@ -100,50 +118,55 @@ func (p *collaboratorCache) buildCache(ctx context.Context) error {
 				for _, value := range values {
 					privilegeKey := workato.PrivilegeId(keyGroup, value)
 
-					p.privilegeToUser.Set(privilegeKey, compoundUser.Id(), compoundUser)
+					err = appendCachedValue[*CompoundUser](ctx, sessionStorage, privilegeToUserCachePrefix, privilegeKey, compoundUser)
+					if err != nil {
+						return fmt.Errorf("failed to set privilege to user cache in session storage: %w", err)
+					}
 				}
 			}
 
 			// Build for folders
 			for _, folderId := range collaboratorRole.FolderIDs {
-				p.folderToUser.Set(folderId, compoundUser.Id(), compoundUser)
+				folderIdStr := strconv.Itoa(folderId)
+				err = appendCachedValue[*CompoundUser](ctx, sessionStorage, folderToUserCachePrefix, folderIdStr, compoundUser)
+				if err != nil {
+					return fmt.Errorf("failed to set folder to user cache in session storage: %w", err)
+				}
 			}
 		}
 
 		// Build for roles
 		for _, role := range collaborator.Roles {
-			if role.EnvironmentType != p.env.String() {
+			if role.EnvironmentType != c.env.String() {
 				continue
 			}
 
-			p.roleToUser.Set(role.RoleName, compoundUser.Id(), compoundUser)
+			err = appendCachedValue[*CompoundUser](ctx, sessionStorage, roleToUserCachePrefix, role.RoleName, compoundUser)
+			if err != nil {
+				return fmt.Errorf("failed to set role to user cache in session storage: %w", err)
+			}
 		}
 	}
 
-	l.Info("Cache built for collaborators")
 	return nil
 }
 
-func (p *collaboratorCache) getUsersByPrivilege(privilegeKey string) []*CompoundUser {
-	if !p.initialized {
-		return nil
+func appendCachedValue[T any](ctx context.Context, sessionStorage sessions.SessionStore, cachePrefix string, cacheKey string, cacheValue T) error {
+	values, found, err := session.GetJSON[[]T](ctx, sessionStorage, cacheKey, sessions.WithPrefix(cachePrefix))
+	if err != nil {
+		return fmt.Errorf("failed to get cached value from session storage: %w", err)
 	}
 
-	return p.privilegeToUser.GetAll(privilegeKey)
-}
-
-func (p *collaboratorCache) getUsersByFolder(folderId int) []*CompoundUser {
-	if !p.initialized {
-		return nil
+	if !found {
+		values = []T{}
 	}
 
-	return p.folderToUser.GetAll(folderId)
-}
+	values = append(values, cacheValue)
 
-func (p *collaboratorCache) getUsersByRole(roleName string) []*CompoundUser {
-	if !p.initialized {
-		return nil
+	err = session.SetJSON(ctx, sessionStorage, cacheKey, values, sessions.WithPrefix(cachePrefix))
+	if err != nil {
+		return fmt.Errorf("failed to set folder roles in session storage: %w", err)
 	}
 
-	return p.roleToUser.GetAll(roleName)
+	return nil
 }

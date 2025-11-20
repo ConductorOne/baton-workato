@@ -20,7 +20,6 @@ const (
 
 type privilegeBuilder struct {
 	client *client.WorkatoClient
-	cache  *collaboratorCache
 }
 
 func (o *privilegeBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
@@ -62,15 +61,10 @@ func (o *privilegeBuilder) Entitlements(_ context.Context, resource *v2.Resource
 }
 
 // Grants always returns an empty slice for users since they don't have any entitlements.
-func (o *privilegeBuilder) Grants(ctx context.Context, resource *v2.Resource, _ rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
-	// Ensure cache is initialized
-	if err := o.cache.init(ctx); err != nil {
-		return nil, nil, err
-	}
-
+func (o *privilegeBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
 	privilegeId := resource.Id.Resource
 
-	users := o.cache.getUsersByPrivilege(privilegeId)
+	users := getUsersByPrivilege(ctx, attr.Session, privilegeId)
 
 	var rv []*v2.Grant
 
@@ -96,10 +90,9 @@ func (o *privilegeBuilder) Grants(ctx context.Context, resource *v2.Resource, _ 
 	return rv, nil, nil
 }
 
-func newPrivilegeBuilder(client *client.WorkatoClient, env workato.Environment) *privilegeBuilder {
+func newPrivilegeBuilder(client *client.WorkatoClient) *privilegeBuilder {
 	return &privilegeBuilder{
 		client: client,
-		cache:  newCollaboratorCache(client, env),
 	}
 }
 
