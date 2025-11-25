@@ -23,7 +23,6 @@ const (
 
 type folderBuilder struct {
 	client                 *client.WorkatoClient
-	cache                  *collaboratorCache
 	disableCustomRolesSync bool
 }
 

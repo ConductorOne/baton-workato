@@ -14,7 +14,7 @@ import (
 
 type collaboratorBuilder struct {
 	client *client.WorkatoClient
-	cache *collaboratorCache
+	cache  *collaboratorCache
 }
 
 func (o *collaboratorBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
@@ -33,7 +33,10 @@ func (o *collaboratorBuilder) List(ctx context.Context, _ *v2.ResourceId, attr r
 	}
 
 	// Set collaborators cache
-	o.cache.setCollaboratorsCache(ctx, attr.Session, collaborators)
+	err = o.cache.setCollaboratorsCache(ctx, attr.Session, collaborators)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	rv := make([]*v2.Resource, len(collaborators))
 

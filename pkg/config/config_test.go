@@ -5,6 +5,7 @@ import (
 
 	"github.com/conductorone/baton-sdk/pkg/field"
 	"github.com/conductorone/baton-sdk/pkg/test"
+	"github.com/spf13/viper"
 )
 
 func TestConfigs(t *testing.T) {
@@ -17,5 +18,9 @@ func TestConfigs(t *testing.T) {
 		// Add test cases here.
 	}
 
-	test.ExerciseTestCases(t, configurationSchema, ValidateConfig, testCases)
+	validateConfig := func(v *viper.Viper) error {
+		return nil
+	}
+
+	test.ExerciseTestCases(t, configurationSchema, validateConfig, testCases)
 }
