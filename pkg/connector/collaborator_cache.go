@@ -93,6 +93,12 @@ func getUsersByRole(ctx context.Context, sessionStorage sessions.SessionStore, r
 func (c *collaboratorCache) setCollaboratorsCache(ctx context.Context, sessionStorage sessions.SessionStore, collaborators []client.Collaborator) error {
 	l := ctxzap.Extract(ctx)
 
+	var (
+		roleToUsers      = make(map[string][]*CompoundUser)
+		folderToUsers    = make(map[string][]*CompoundUser)
+		privilegeToUsers = make(map[string][]*CompoundUser)
+	)
+
 	for _, collaborator := range collaborators {
 		collaboratorRoles, err := c.client.GetCollaboratorPrivileges(ctx, collaborator.Id)
 		if err != nil {
@@ -118,20 +124,15 @@ func (c *collaboratorCache) setCollaboratorsCache(ctx context.Context, sessionSt
 				for _, value := range values {
 					privilegeKey := workato.PrivilegeId(keyGroup, value)
 
-					err = appendCachedValue[*CompoundUser](ctx, sessionStorage, privilegeToUserCachePrefix, privilegeKey, compoundUser)
-					if err != nil {
-						return fmt.Errorf("failed to set privilege to user cache in session storage: %w", err)
-					}
+					appendCachedValue(privilegeToUsers, privilegeKey, compoundUser)
 				}
 			}
 
 			// Build for folders
 			for _, folderId := range collaboratorRole.FolderIDs {
 				folderIdStr := strconv.Itoa(folderId)
-				err = appendCachedValue[*CompoundUser](ctx, sessionStorage, folderToUserCachePrefix, folderIdStr, compoundUser)
-				if err != nil {
-					return fmt.Errorf("failed to set folder to user cache in session storage: %w", err)
-				}
+
+				appendCachedValue(folderToUsers, folderIdStr, compoundUser)
 			}
 		}
 
@@ -140,33 +141,32 @@ func (c *collaboratorCache) setCollaboratorsCache(ctx context.Context, sessionSt
 			if role.EnvironmentType != c.env.String() {
 				continue
 			}
+			appendCachedValue(roleToUsers, role.RoleName, compoundUser)
+		}
+	}
 
-			err = appendCachedValue[*CompoundUser](ctx, sessionStorage, roleToUserCachePrefix, role.RoleName, compoundUser)
-			if err != nil {
-				return fmt.Errorf("failed to set role to user cache in session storage: %w", err)
-			}
+	if (len(privilegeToUsers)) > 0 {
+		err := session.SetManyJSON(ctx, sessionStorage, privilegeToUsers, sessions.WithPrefix(privilegeToUserCachePrefix))
+		if err != nil {
+			return fmt.Errorf("failed to set privilege to user cache in session storage: %w", err)
+		}
+	}
+	if (len(folderToUsers)) > 0 {
+		err := session.SetManyJSON(ctx, sessionStorage, folderToUsers, sessions.WithPrefix(folderToUserCachePrefix))
+		if err != nil {
+			return fmt.Errorf("failed to set folder to user cache in session storage: %w", err)
+		}
+	}
+	if (len(roleToUsers)) > 0 {
+		err := session.SetManyJSON(ctx, sessionStorage, roleToUsers, sessions.WithPrefix(roleToUserCachePrefix))
+		if err != nil {
+			return fmt.Errorf("failed to set role to user cache in session storage: %w", err)
 		}
 	}
 
 	return nil
 }
 
-func appendCachedValue[T any](ctx context.Context, sessionStorage sessions.SessionStore, cachePrefix string, cacheKey string, cacheValue T) error {
-	values, found, err := session.GetJSON[[]T](ctx, sessionStorage, cacheKey, sessions.WithPrefix(cachePrefix))
-	if err != nil {
-		return fmt.Errorf("failed to get cached value from session storage: %w", err)
-	}
-
-	if !found {
-		values = []T{}
-	}
-
-	values = append(values, cacheValue)
-
-	err = session.SetJSON(ctx, sessionStorage, cacheKey, values, sessions.WithPrefix(cachePrefix))
-	if err != nil {
-		return fmt.Errorf("failed to set folder roles in session storage: %w", err)
-	}
-
-	return nil
+func appendCachedValue[T any](storage map[string][]*T, cacheKey string, cacheValue *T) {
+	storage[cacheKey] = append(storage[cacheKey], cacheValue)
 }

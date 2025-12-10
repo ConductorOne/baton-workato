@@ -65,7 +65,7 @@ func NewConnector(ctx context.Context, workatoClient *client.WorkatoClient, env 
 }
 
 // New returns the Workato connector configured to sync against the instance URL.
-func New(ctx context.Context, config *cfg.Workato, opts *cli.ConnectorOpts) (connectorbuilder.ConnectorBuilderV2, []connectorbuilder.Opt, error) {
+func New(ctx context.Context, config *cfg.Workato, _ *cli.ConnectorOpts) (connectorbuilder.ConnectorBuilderV2, []connectorbuilder.Opt, error) {
 	l := ctxzap.Extract(ctx)
 	err := field.Validate(cfg.Config, config)
 	if err != nil {

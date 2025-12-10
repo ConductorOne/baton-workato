@@ -164,7 +164,7 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs
 		role := getRoleById(ctx, attr.Session, resource.Id.Resource)
 		if role == nil {
 			l.Warn("role not found", zap.String("role_name", resource.DisplayName), zap.String("role_id", resource.Id.Resource))
-			return rv, nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("role %s (%s) not found", resource.DisplayName, resource.Id.Resource))
+			return nil, nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("role %s (%s) not found", resource.DisplayName, resource.Id.Resource))
 		}
 
 		privileges, err := workato.FindRelatedPrivilegesErr(role.Privileges)

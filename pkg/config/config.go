@@ -55,7 +55,7 @@ var (
 var Config = field.NewConfiguration(
 	ConfigurationFields,
 	field.WithConstraints(FieldRelationships...),
-	field.WithConnectorDisplayName("Wrokato"),
+	field.WithConnectorDisplayName("Workato"),
 	field.WithHelpUrl("/docs/baton/workato"),
 	field.WithIconUrl("/static/app-icons/workato.svg"),
 )
