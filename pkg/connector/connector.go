@@ -28,9 +28,9 @@ type Connector struct {
 func (d *Connector) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncerV2 {
 	return []connectorbuilder.ResourceSyncerV2{
 		newCollaboratorBuilder(d.client, d.env),
-		newPrivilegeBuilder(d.client),
+		newPrivilegeBuilder(d.client, d.env),
 		newRoleBuilder(d.client, d.env, d.disableCustomRolesSync),
-		newFolderBuilder(d.client, d.disableCustomRolesSync),
+		newFolderBuilder(d.client, d.env, d.disableCustomRolesSync),
 		newProjectBuilder(d.client),
 	}
 }

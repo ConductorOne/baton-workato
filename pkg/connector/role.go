@@ -26,6 +26,7 @@ var (
 type roleBuilder struct {
 	client                 *client.WorkatoClient
 	env                    workato.Environment
+	cache                  *collaboratorCache
 	disableCustomRolesSync bool
 }
 
@@ -94,12 +95,12 @@ func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ r
 	return rv, nil, nil
 }
 
-// Grants always returns an empty slice for users since they don't have any entitlements.
+// Grants returns collaborator-has grants and derived privilege grants for base and custom roles.
 func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
 	l := ctxzap.Extract(ctx)
 
 	// Since roles names are unique, we can use the role name as the key to get all the users that have that role.
-	collaborators := getUsersByRole(ctx, attr.Session, resource.DisplayName)
+	collaborators := o.cache.getUsersByRole(ctx, attr.Session, resource.DisplayName)
 
 	rv := make([]*v2.Grant, 0)
 
@@ -278,6 +279,7 @@ func newRoleBuilder(client *client.WorkatoClient, env workato.Environment, disab
 	return &roleBuilder{
 		client:                 client,
 		env:                    env,
+		cache:                  newCollaboratorCache(client, env),
 		disableCustomRolesSync: disableCustomRolesSync,
 	}
 }

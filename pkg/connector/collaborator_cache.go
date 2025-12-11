@@ -40,10 +40,58 @@ const (
 	privilegeToUserCachePrefix = "privilege_to_user"
 	folderToUserCachePrefix    = "folder_to_user"
 	roleToUserCachePrefix      = "role_to_user"
+	cacheInitializedMarker     = "cache_initialized"
+	cacheMarkerPrefix          = "collaborator_cache"
 )
 
-func getUsersByPrivilege(ctx context.Context, sessionStorage sessions.SessionStore, privilegeKey string) []*CompoundUser {
+// isCacheInitialized checks if the collaborator cache has been initialized by looking for a marker key.
+func (c *collaboratorCache) isCacheInitialized(ctx context.Context, sessionStorage sessions.SessionStore) (bool, error) {
+	_, found, err := session.GetJSON[bool](ctx, sessionStorage, cacheInitializedMarker, sessions.WithPrefix(cacheMarkerPrefix))
+	if err != nil {
+		return false, err
+	}
+	return found, nil
+}
+
+func (c *collaboratorCache) initializeCache(ctx context.Context, sessionStorage sessions.SessionStore) error {
 	l := ctxzap.Extract(ctx)
+
+	initialized, err := c.isCacheInitialized(ctx, sessionStorage)
+	if err != nil {
+		l.Error("failed to check cache initialization status", zap.Error(err))
+		return err
+	}
+
+	if initialized {
+		return nil
+	}
+
+	// Cache not initialized, fetch collaborators and initialize cache
+	l.Debug("cache not initialized, fetching collaborators and initializing cache")
+	collaborators, err := c.client.GetCollaborators(ctx)
+	if err != nil {
+		l.Error("failed to fetch collaborators to initialize cache", zap.Error(err))
+		return err
+	}
+
+	err = c.setCollaboratorsCache(ctx, sessionStorage, collaborators)
+	if err != nil {
+		l.Error("failed to set collaborators cache", zap.Error(err))
+		return err
+	}
+
+	// Cache initialization marker is set by setCollaboratorsCache
+	return nil
+}
+
+func (c *collaboratorCache) getUsersByPrivilege(ctx context.Context, sessionStorage sessions.SessionStore, privilegeKey string) []*CompoundUser {
+	l := ctxzap.Extract(ctx)
+
+	// Ensure cache is initialized before attempting to retrieve
+	if err := c.initializeCache(ctx, sessionStorage); err != nil {
+		l.Error("failed to ensure cache is initialized", zap.Error(err))
+		return nil
+	}
 
 	users, found, err := session.GetJSON[[]*CompoundUser](ctx, sessionStorage, privilegeKey, sessions.WithPrefix(privilegeToUserCachePrefix))
 	if err != nil {
@@ -58,8 +106,14 @@ func getUsersByPrivilege(ctx context.Context, sessionStorage sessions.SessionSto
 	return users
 }
 
-func getUsersByFolder(ctx context.Context, sessionStorage sessions.SessionStore, folderId string) []*CompoundUser {
+func (c *collaboratorCache) getUsersByFolder(ctx context.Context, sessionStorage sessions.SessionStore, folderId string) []*CompoundUser {
 	l := ctxzap.Extract(ctx)
+
+	// Ensure cache is initialized before attempting to retrieve
+	if err := c.initializeCache(ctx, sessionStorage); err != nil {
+		l.Error("failed to ensure cache is initialized", zap.Error(err))
+		return nil
+	}
 
 	users, found, err := session.GetJSON[[]*CompoundUser](ctx, sessionStorage, folderId, sessions.WithPrefix(folderToUserCachePrefix))
 	if err != nil {
@@ -74,8 +128,14 @@ func getUsersByFolder(ctx context.Context, sessionStorage sessions.SessionStore,
 	return users
 }
 
-func getUsersByRole(ctx context.Context, sessionStorage sessions.SessionStore, roleName string) []*CompoundUser {
+func (c *collaboratorCache) getUsersByRole(ctx context.Context, sessionStorage sessions.SessionStore, roleName string) []*CompoundUser {
 	l := ctxzap.Extract(ctx)
+
+	// Ensure cache is initialized before attempting to retrieve
+	if err := c.initializeCache(ctx, sessionStorage); err != nil {
+		l.Error("failed to ensure cache is initialized", zap.Error(err))
+		return nil
+	}
 
 	users, found, err := session.GetJSON[[]*CompoundUser](ctx, sessionStorage, roleName, sessions.WithPrefix(roleToUserCachePrefix))
 	if err != nil {
@@ -162,6 +222,12 @@ func (c *collaboratorCache) setCollaboratorsCache(ctx context.Context, sessionSt
 		if err != nil {
 			return fmt.Errorf("failed to set role to user cache in session storage: %w", err)
 		}
+	}
+
+	// Set the initialization marker to indicate cache is now initialized
+	err := session.SetJSON(ctx, sessionStorage, cacheInitializedMarker, true, sessions.WithPrefix(cacheMarkerPrefix))
+	if err != nil {
+		return fmt.Errorf("failed to set cache initialization marker: %w", err)
 	}
 
 	return nil

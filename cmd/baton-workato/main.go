@@ -16,7 +16,7 @@ func main() {
 
 	config.RunConnector(
 		ctx,
-		"baton-outreach",
+		"baton-workato",
 		version,
 		cfg.Config,
 		connector.New,

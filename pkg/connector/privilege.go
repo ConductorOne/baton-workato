@@ -20,6 +20,7 @@ const (
 
 type privilegeBuilder struct {
 	client *client.WorkatoClient
+	cache  *collaboratorCache
 }
 
 func (o *privilegeBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
@@ -64,7 +65,7 @@ func (o *privilegeBuilder) Entitlements(_ context.Context, resource *v2.Resource
 func (o *privilegeBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
 	privilegeId := resource.Id.Resource
 
-	users := getUsersByPrivilege(ctx, attr.Session, privilegeId)
+	users := o.cache.getUsersByPrivilege(ctx, attr.Session, privilegeId)
 
 	var rv []*v2.Grant
 
@@ -90,9 +91,10 @@ func (o *privilegeBuilder) Grants(ctx context.Context, resource *v2.Resource, at
 	return rv, nil, nil
 }
 
-func newPrivilegeBuilder(client *client.WorkatoClient) *privilegeBuilder {
+func newPrivilegeBuilder(client *client.WorkatoClient, env workato.Environment) *privilegeBuilder {
 	return &privilegeBuilder{
 		client: client,
+		cache:  newCollaboratorCache(client, env),
 	}
 }
 
