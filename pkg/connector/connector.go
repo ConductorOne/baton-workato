@@ -5,12 +5,17 @@ import (
 	"io"
 
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/conductorone/baton-sdk/pkg/cli"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
+	"github.com/conductorone/baton-sdk/pkg/field"
+	cfg "github.com/conductorone/baton-workato/pkg/config"
 )
 
 type Connector struct {
@@ -20,9 +25,9 @@ type Connector struct {
 }
 
 // ResourceSyncers returns a ResourceSyncer for each resource type that should be synced from the upstream service.
-func (d *Connector) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncer {
-	return []connectorbuilder.ResourceSyncer{
-		newCollaboratorBuilder(d.client),
+func (d *Connector) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncerV2 {
+	return []connectorbuilder.ResourceSyncerV2{
+		newCollaboratorBuilder(d.client, d.env),
 		newPrivilegeBuilder(d.client, d.env),
 		newRoleBuilder(d.client, d.env, d.disableCustomRolesSync),
 		newFolderBuilder(d.client, d.env, d.disableCustomRolesSync),
@@ -51,10 +56,38 @@ func (d *Connector) Validate(ctx context.Context) (annotations.Annotations, erro
 }
 
 // New returns a new instance of the connector.
-func New(ctx context.Context, workatoClient *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) (*Connector, error) {
+func NewConnector(ctx context.Context, workatoClient *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) (*Connector, error) {
 	return &Connector{
 		client:                 workatoClient,
 		env:                    env,
 		disableCustomRolesSync: disableCustomRolesSync,
 	}, nil
+}
+
+// New returns the Workato connector configured to sync against the instance URL.
+func New(ctx context.Context, config *cfg.Workato, _ *cli.ConnectorOpts) (connectorbuilder.ConnectorBuilderV2, []connectorbuilder.Opt, error) {
+	l := ctxzap.Extract(ctx)
+	err := field.Validate(cfg.Config, config)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	dataCenterUrl := client.WorkatoDataCenters[config.WorkatoDataCenter]
+
+	env, err := workato.EnvFromString(config.WorkatoEnv)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	workatoClient, err := client.NewWorkatoClient(ctx, config.WorkatoApiKey, dataCenterUrl)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cb, err := NewConnector(ctx, workatoClient, env, config.DisableCustomRolesSync)
+	if err != nil {
+		l.Error("error creating connector", zap.Error(err))
+		return nil, nil, err
+	}
+	return cb, nil, nil
 }
