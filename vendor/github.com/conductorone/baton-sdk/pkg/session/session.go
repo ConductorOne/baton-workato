@@ -9,7 +9,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/types/sessions"
 )
 
-const MaxKeysPerRequest = 100
+const MaxKeysPerRequest = 15
 
 func Chunk[T any](items []T, chunkSize int) iter.Seq[[]T] {
 	return func(yield func([]T) bool) {
