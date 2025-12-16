@@ -11,7 +11,6 @@ import (
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
-	"github.com/conductorone/baton-sdk/pkg/types/grant"
 )
 
 const (
@@ -63,32 +62,7 @@ func (o *privilegeBuilder) Entitlements(_ context.Context, resource *v2.Resource
 
 // Grants always returns an empty slice for users since they don't have any entitlements.
 func (o *privilegeBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
-	privilegeId := resource.Id.Resource
-
-	users := o.cache.getUsersByPrivilege(ctx, attr.Session, privilegeId)
-
-	var rv []*v2.Grant
-
-	for _, user := range users {
-		collaboratorId, err := rs.NewResourceID(collaboratorResourceType, user.User.Id)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		// Collaborator only have privileges if a role is assigned to them
-		// To update collaborator privileges, the role must be updated
-		// privilege grants for roles implemented in role resource
-		grantToCollaborator := grant.NewGrant(
-			resource,
-			assignedEntitlement,
-			collaboratorId,
-			grant.WithAnnotation(&v2.GrantImmutable{}),
-		)
-
-		rv = append(rv, grantToCollaborator)
-	}
-
-	return rv, nil, nil
+	return nil, nil, nil
 }
 
 func newPrivilegeBuilder(client *client.WorkatoClient, env workato.Environment) *privilegeBuilder {

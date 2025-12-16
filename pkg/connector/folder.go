@@ -121,11 +121,6 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, attr 
 
 	if bag.Current() == nil {
 		bag.Push(Bag{
-			ResourceTypeID: collaboratorResourceType.Id,
-			Page:           0,
-		})
-
-		bag.Push(Bag{
 			ResourceTypeID: roleResourceType.Id,
 			Page:           0,
 		})
@@ -143,28 +138,6 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, attr 
 	state := bag.Pop()
 
 	var rv []*v2.Grant
-
-	if state.ResourceTypeID == collaboratorResourceType.Id {
-		folderId := resource.Id.Resource
-		collaborators := o.cache.getUsersByFolder(ctx, attr.Session, folderId)
-
-		for _, collaborator := range collaborators {
-			collaboratorId, err := rs.NewResourceID(collaboratorResourceType, collaborator.User.Id)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			// Collaborator only access to the folder if a role have access
-			// To update collaborator folder access, the role must be updated
-			newGrant := grant.NewGrant(
-				resource,
-				collaboratorAccessEntitlement,
-				collaboratorId,
-				grant.WithAnnotation(&v2.GrantImmutable{}),
-			)
-			rv = append(rv, newGrant)
-		}
-	}
 
 	if state.ResourceTypeID == roleResourceType.Id && !o.disableCustomRolesSync {
 		folderId := resource.Id.Resource
