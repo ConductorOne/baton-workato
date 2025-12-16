@@ -56,6 +56,12 @@ func (o *roleBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId,
 			return nil, nil, err
 		}
 
+		// cache roles
+		err = setRolesCache(ctx, attr.Session, roles)
+		if err != nil {
+			return nil, nil, err
+		}
+
 		for _, role := range roles {
 			us, err := roleResource(&role)
 			if err != nil {
