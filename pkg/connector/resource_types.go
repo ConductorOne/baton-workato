@@ -2,6 +2,7 @@ package connector
 
 import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 )
 
 // The user resource type is for all user objects from the database.
@@ -14,6 +15,7 @@ var collaboratorResourceType = &v2.ResourceType{
 var privilegeResourceType = &v2.ResourceType{
 	Id:          "privilege",
 	DisplayName: "Privilege",
+	Annotations: annotations.New(&v2.SkipGrants{}),
 }
 
 var roleResourceType = &v2.ResourceType{
@@ -30,4 +32,5 @@ var folderResourceType = &v2.ResourceType{
 var projectResourceType = &v2.ResourceType{
 	Id:          "project",
 	DisplayName: "Project",
+	Annotations: annotations.New(&v2.SkipEntitlementsAndGrants{}),
 }
