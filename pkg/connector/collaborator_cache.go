@@ -30,9 +30,9 @@ const (
 )
 
 func (c *collaboratorCache) setCollaboratorsCache(ctx context.Context, sessionStorage sessions.SessionStore, collaborators []client.Collaborator) error {
-	collaboratorMap := make(map[string]client.Collaborator)
+	collaboratorMap := make(map[string]*client.Collaborator)
 	for _, collaborator := range collaborators {
-		collaboratorMap[strconv.Itoa(collaborator.Id)] = collaborator
+		collaboratorMap[strconv.Itoa(collaborator.Id)] = &collaborator
 	}
 	err := session.SetManyJSON(ctx, sessionStorage, collaboratorMap, sessions.WithPrefix(collaboratorNamespace))
 	if err != nil {
@@ -41,14 +41,14 @@ func (c *collaboratorCache) setCollaboratorsCache(ctx context.Context, sessionSt
 	return nil
 }
 
-func (c *collaboratorCache) getCollaborator(ctx context.Context, sessionStorage sessions.SessionStore, collaboratorId string) (client.Collaborator, error) {
+func (c *collaboratorCache) getCollaborator(ctx context.Context, sessionStorage sessions.SessionStore, collaboratorId string) (*client.Collaborator, error) {
 	collaborator, found, err := session.GetJSON[client.Collaborator](ctx, sessionStorage, collaboratorId, sessions.WithPrefix(collaboratorNamespace))
 	if err != nil {
-		return client.Collaborator{}, fmt.Errorf("failed to get collaborator from session storage: %w", err)
+		return nil, fmt.Errorf("failed to get collaborator from session storage: %w", err)
 	}
 	if !found {
-		// TODO: Add fallback to get collaborator from API
-		return client.Collaborator{}, status.Errorf(codes.NotFound, "collaborator not found")
+		// TODO: Add fallback to get collaborator from API?
+		return nil, status.Errorf(codes.NotFound, "collaborator not found")
 	}
-	return collaborator, nil
+	return &collaborator, nil
 }
