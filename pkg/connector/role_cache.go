@@ -51,7 +51,7 @@ func getRoleById(ctx context.Context, sessionStorage sessions.SessionStore, role
 
 func setRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, roles []client.Role) error {
 	if len(roles) > 0 {
-		err := session.SetManyJSON(ctx, sessionStorage, parseJSONRolesCache(roles), sessions.WithPrefix("roles"))
+		err := session.SetManyJSON(ctx, sessionStorage, parseJSONRolesCache(roles), sessions.WithPrefix(rolesCachePrefix))
 		if err != nil {
 			return fmt.Errorf("failed to set roles cache in session storage: %w", err)
 		}
@@ -74,7 +74,7 @@ func setRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, ro
 	}
 
 	if (len(mapRoles)) > 0 {
-		err := session.SetManyJSON(ctx, sessionStorage, mapRoles, sessions.WithPrefix("folder_roles"))
+		err := session.SetManyJSON(ctx, sessionStorage, mapRoles, sessions.WithPrefix(folderRolesCachePrefix))
 		if err != nil {
 			return fmt.Errorf("failed to set folder roles in session storage: %w", err)
 		}
