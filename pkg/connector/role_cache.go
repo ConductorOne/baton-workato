@@ -78,9 +78,10 @@ func setRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, ro
 	var mapRolesByName = make(map[string]*client.Role)
 
 	for _, role := range roles {
+		copyRole := role
+
 		for _, folderID := range role.FolderIDs {
 			folderIDStr := strconv.Itoa(folderID)
-			copyRole := role
 
 			if roles, ok := mapRoles[folderIDStr]; ok {
 				roles = append(roles, &copyRole)
@@ -90,7 +91,7 @@ func setRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, ro
 			}
 		}
 
-		mapRolesByName[role.Name] = &role
+		mapRolesByName[copyRole.Name] = &copyRole
 	}
 
 	if (len(mapRoles)) > 0 {
