@@ -7,7 +7,7 @@ import (
 
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
-	"github.com/conductorone/baton-sdk/pkg/uhttp"
+	"github.com/conductorone/baton-sdk/pkg/types/sessions"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
 	"go.uber.org/zap"
@@ -76,58 +76,12 @@ func (o *collaboratorBuilder) Grants(ctx context.Context, resource *v2.Resource,
 		return nil, nil, fmt.Errorf("failed to convert collaborator id to int: %w", err)
 	}
 
-	collaborator, err := o.cache.getCollaborator(ctx, attr.Session, collaboratorIdStr)
+	collaboratorRoleGrants, err := o.collaboratorRoleGrants(ctx, attr.Session, principalID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get collaborator from cache: %w", err)
+		return nil, nil, err
 	}
 
-	// Build for roles
-	for _, role := range collaborator.Roles {
-		if role.EnvironmentType != o.env.String() {
-			continue
-		}
-
-		var roleResource *v2.Resource
-
-		switch {
-		case workato.IsBaseRole(role.RoleName):
-			baseRole, err := workato.GetBaseRole(role.RoleName)
-			if err != nil {
-				l.Error("failed to get base role %s", zap.String("role_name", role.RoleName), zap.Error(err))
-				return nil, nil, fmt.Errorf("failed to get base role: %w", err)
-			}
-			roleResource = &v2.Resource{
-				Id: &v2.ResourceId{
-					ResourceType: roleResourceType.Id,
-					Resource:     baseRole.RoleName,
-				},
-			}
-		case !o.disableCustomRolesSync:
-			role := getRoleByName(ctx, attr.Session, role.RoleName)
-			if role == nil {
-				return rv, nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("role %s (%d) not found", role.Name, role.Id))
-			}
-			roleResource = &v2.Resource{
-				Id: &v2.ResourceId{
-					ResourceType: roleResourceType.Id,
-					Resource:     strconv.Itoa(role.Id),
-				},
-			}
-		default:
-			l.Debug("skipping role %s because it is not a base role and custom roles sync is disabled", zap.String("role_name", role.RoleName))
-			continue
-		}
-
-		newGrant := grant.NewGrant(
-			roleResource,
-			collaboratorHasRoleEntitlement,
-			principalID,
-			grant.WithGrantMetadata(map[string]interface{}{
-				"environment_type": role.EnvironmentType,
-			}),
-		)
-		rv = append(rv, newGrant)
-	}
+	rv = append(rv, collaboratorRoleGrants...)
 
 	collaboratorRoles, err := o.client.GetCollaboratorPrivileges(ctx, collaboratorId)
 	if err != nil {
@@ -145,53 +99,123 @@ func (o *collaboratorBuilder) Grants(ctx context.Context, resource *v2.Resource,
 		}
 
 		// Build for privileges
-		for keyGroup, values := range collaboratorRole.Privileges {
-			for _, value := range values {
-				privilegeID := workato.PrivilegeId(keyGroup, value)
-
-				privilegeResource := &v2.Resource{
-					Id: &v2.ResourceId{
-						ResourceType: privilegeResourceType.Id,
-						Resource:     privilegeID,
-					},
-				}
-
-				// Collaborator only have privileges if a role is assigned to them
-				// To update collaborator privileges, the role must be updated
-				// privilege grants for roles implemented in role resource
-				grantToCollaborator := grant.NewGrant(
-					privilegeResource,
-					assignedEntitlement,
-					principalID,
-					grant.WithAnnotation(&v2.GrantImmutable{}),
-				)
-
-				rv = append(rv, grantToCollaborator)
+		for group, privileges := range collaboratorRole.Privileges {
+			for _, privilege := range privileges {
+				newGrant := collaboratorPrivilegeGrant(group, privilege, principalID)
+				rv = append(rv, newGrant)
 			}
 		}
 
 		// Build for folders
 		for _, folderId := range collaboratorRole.FolderIDs {
-			folderResource := &v2.Resource{
-				Id: &v2.ResourceId{
-					ResourceType: folderResourceType.Id,
-					Resource:     strconv.Itoa(folderId),
-				},
-			}
-
-			// Collaborator only access to the folder if a role have access
-			// To update collaborator folder access, the role must be updated
-			newGrant := grant.NewGrant(
-				folderResource,
-				collaboratorAccessEntitlement,
-				principalID,
-				grant.WithAnnotation(&v2.GrantImmutable{}),
-			)
+			newGrant := collaboratorFolderGrant(folderId, principalID)
 			rv = append(rv, newGrant)
 		}
 	}
 
 	return rv, nil, nil
+}
+
+func collaboratorFolderGrant(folderId int, principalID *v2.ResourceId) *v2.Grant {
+	folderResource := &v2.Resource{
+		Id: &v2.ResourceId{
+			ResourceType: folderResourceType.Id,
+			Resource:     strconv.Itoa(folderId),
+		},
+	}
+
+	// Collaborator only access to the folder if a role have access
+	// To update collaborator folder access, the role must be updated
+	return grant.NewGrant(
+		folderResource,
+		collaboratorAccessEntitlement,
+		principalID,
+		grant.WithAnnotation(&v2.GrantImmutable{}),
+	)
+}
+
+func collaboratorPrivilegeGrant(group string, privilege string, principalID *v2.ResourceId) *v2.Grant {
+	privilegeId := workato.PrivilegeId(group, privilege)
+
+	privilegeResource := &v2.Resource{
+		Id: &v2.ResourceId{
+			ResourceType: privilegeResourceType.Id,
+			Resource:     privilegeId,
+		},
+	}
+
+	// Collaborator only have privileges if a role is assigned to them
+	// To update collaborator privileges, the role must be updated
+	return grant.NewGrant(
+		privilegeResource,
+		assignedEntitlement,
+		principalID,
+	)
+}
+
+func (o *collaboratorBuilder) collaboratorRoleGrants(ctx context.Context, session sessions.SessionStore, principalID *v2.ResourceId) ([]*v2.Grant, error) {
+	l := ctxzap.Extract(ctx)
+
+	if principalID.ResourceType != collaboratorResourceType.Id {
+		return nil, fmt.Errorf("principal ID is not a collaborator")
+	}
+
+	rv := make([]*v2.Grant, 0)
+	collaboratorId := principalID.Resource
+
+	collaborator, err := o.cache.getCollaborator(ctx, session, collaboratorId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get collaborator from cache: %w", err)
+	}
+
+	// Build for roles
+	for _, role := range collaborator.Roles {
+		if role.EnvironmentType != o.env.String() {
+			continue
+		}
+
+		var roleResource *v2.Resource
+
+		switch {
+		case workato.IsBaseRole(role.RoleName):
+			baseRole, err := workato.GetBaseRole(role.RoleName)
+			if err != nil {
+				l.Error("failed to get base role %s", zap.String("role_name", role.RoleName), zap.Error(err))
+				return nil, fmt.Errorf("failed to get base role: %w", err)
+			}
+			roleResource = &v2.Resource{
+				Id: &v2.ResourceId{
+					ResourceType: roleResourceType.Id,
+					Resource:     baseRole.RoleName,
+				},
+			}
+		case !o.disableCustomRolesSync:
+			customRole := getRoleByName(ctx, session, role.RoleName)
+			if customRole == nil {
+				return nil, fmt.Errorf("custom role %s not found", role.RoleName)
+			}
+			roleResource = &v2.Resource{
+				Id: &v2.ResourceId{
+					ResourceType: roleResourceType.Id,
+					Resource:     strconv.Itoa(customRole.Id),
+				},
+			}
+		default:
+			l.Debug("skipping role %s because it is not a base role and custom roles sync is disabled", zap.String("role_name", role.RoleName))
+			continue
+		}
+
+		newGrant := grant.NewGrant(
+			roleResource,
+			collaboratorHasRoleEntitlement,
+			principalID,
+			grant.WithGrantMetadata(map[string]interface{}{
+				"environment_type": role.EnvironmentType,
+			}),
+		)
+		rv = append(rv, newGrant)
+	}
+	return rv, nil
 }
 
 func newCollaboratorBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) *collaboratorBuilder {
