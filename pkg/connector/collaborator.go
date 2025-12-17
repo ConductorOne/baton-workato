@@ -91,9 +91,9 @@ func (o *collaboratorBuilder) Grants(ctx context.Context, resource *v2.Resource,
 
 		switch {
 		case workato.IsBaseRole(role.RoleName):
-			baseRole, err := workato.GetBaseRole(resource.DisplayName)
+			baseRole, err := workato.GetBaseRole(role.RoleName)
 			if err != nil {
-				l.Error("failed to get base role %s", zap.String("role_name", resource.DisplayName), zap.Error(err))
+				l.Error("failed to get base role %s", zap.String("role_name", role.RoleName), zap.Error(err))
 				return nil, nil, fmt.Errorf("failed to get base role: %w", err)
 			}
 			roleResource = &v2.Resource{
