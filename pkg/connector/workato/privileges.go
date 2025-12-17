@@ -427,6 +427,122 @@ Run test cases`,
  and communication (responses) between Workato and the end application`,
 			},
 		},
+		"Policies": {
+			Privilege{
+				Id:          "all",
+				Description: "All policy permissions: view, edit, create, and delete.",
+			},
+			Privilege{
+				Id:          "read",
+				Description: "View policy.",
+			},
+			Privilege{
+				Id:          "create",
+				Description: "Create policy.",
+			},
+			Privilege{
+				Id:          "update",
+				Description: "Edit policy.",
+			},
+			Privilege{
+				Id:          "delete",
+				Description: "Delete policy.",
+			},
+		},
+		"Dashboard & logs": {
+			Privilege{
+				Id:          "all",
+				Description: "Full privileges for dashboard & logs: View metrics in dashboard and details in logs.",
+			},
+		},
+		"Manage locked projects": {
+			Privilege{
+				Id:          "all",
+				Description: "Access to manage locked projects in the workspace.",
+			},
+		},
+		"API platform": {
+			Privilege{
+				Id:          "all",
+				Description: "Access to view and edit API platform settings for the workspace.",
+			},
+		},
+		"Collections & endpoints": {
+			Privilege{
+				Id:          "all",
+				Description: "All collections and endpoints access: view, edit, create, and delete.",
+			},
+			Privilege{
+				Id:          "read",
+				Description: "View collections and endpoints.",
+			},
+			Privilege{
+				Id:          "create",
+				Description: "Create collections and endpoints.",
+			},
+			Privilege{
+				Id:          "update",
+				Description: "Edit collections and endpoints.",
+			},
+			Privilege{
+				Id:          "delete",
+				Description: "Delete collections and endpoints.",
+			},
+		},
+		"Data tables": {
+			Privilege{
+				Id:          "all",
+				Description: "Enables all other permissions.",
+			},
+			Privilege{
+				Id:          "read",
+				Description: "Allows users to view all data tables.",
+			},
+			Privilege{
+				Id:          "create",
+				Description: "Allows users to create new data tables.",
+			},
+			Privilege{
+				Id:          "update_schema",
+				Description: "Allows users to edit the schema (to add, remove, or edit columns) for any data table.",
+			},
+			Privilege{
+				Id:          "update_records",
+				Description: "Allows users to add, edit, or delete records in data tables.",
+			},
+			Privilege{
+				Id:          "delete",
+				Description: "Allows users to delete data tables.",
+			},
+		},
+		"Settings": {
+			Privilege{
+				Id:          "all",
+				Description: "Manage API prefix and custom domain.",
+			},
+		},
+		"Client & access profiles": {
+			Privilege{
+				Id:          "all",
+				Description: "All clients and access profiles permissions: view, edit, create, and delete.",
+			},
+			Privilege{
+				Id:          "read",
+				Description: "View clients and access profiles.",
+			},
+			Privilege{
+				Id:          "create",
+				Description: "Create clients and access profiles.",
+			},
+			Privilege{
+				Id:          "update",
+				Description: "Edit clients and access profiles.",
+			},
+			Privilege{
+				Id:          "delete",
+				Description: "Delete clients and access profiles.",
+			},
+		},
 	}
 )
 
