@@ -8,8 +8,8 @@ import (
 func TestAllCompoundPrivileges(t *testing.T) {
 	result := AllCompoundPrivileges()
 
-	if len(result) != 80 {
-		t.Errorf("Expected 80, got %d", len(result))
+	if len(result) != 105 {
+		t.Errorf("Expected 105, got %d", len(result))
 	}
 }
 
