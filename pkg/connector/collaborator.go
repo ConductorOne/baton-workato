@@ -197,7 +197,7 @@ func (o *collaboratorBuilder) Grants(ctx context.Context, resource *v2.Resource,
 func newCollaboratorBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) *collaboratorBuilder {
 	return &collaboratorBuilder{
 		client:                 client,
-		cache:                  newCollaboratorCache(client, env),
+		cache:                  newCollaboratorCache(client),
 		env:                    env,
 		disableCustomRolesSync: disableCustomRolesSync,
 	}

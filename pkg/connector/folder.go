@@ -174,7 +174,7 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, attr 
 func newFolderBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) *folderBuilder {
 	return &folderBuilder{
 		client:                 client,
-		cache:                  newCollaboratorCache(client, env),
+		cache:                  newCollaboratorCache(client),
 		disableCustomRolesSync: disableCustomRolesSync,
 	}
 }

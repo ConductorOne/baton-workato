@@ -257,7 +257,7 @@ func (o *roleBuilder) Revoke(_ context.Context, grant *v2.Grant) (annotations.An
 func newRoleBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) *roleBuilder {
 	return &roleBuilder{
 		client:                 client,
-		cache:                  newCollaboratorCache(client, env),
+		cache:                  newCollaboratorCache(client),
 		env:                    env,
 		disableCustomRolesSync: disableCustomRolesSync,
 	}

@@ -8,20 +8,17 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/session"
 	"github.com/conductorone/baton-sdk/pkg/types/sessions"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
-	"github.com/conductorone/baton-workato/pkg/connector/workato"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 type collaboratorCache struct {
 	client *client.WorkatoClient
-	env    workato.Environment
 }
 
-func newCollaboratorCache(workatoClient *client.WorkatoClient, env workato.Environment) *collaboratorCache {
+func newCollaboratorCache(workatoClient *client.WorkatoClient) *collaboratorCache {
 	return &collaboratorCache{
 		client: workatoClient,
-		env:    env,
 	}
 }
 
@@ -47,7 +44,6 @@ func (c *collaboratorCache) getCollaborator(ctx context.Context, sessionStorage 
 		return nil, fmt.Errorf("failed to get collaborator from session storage: %w", err)
 	}
 	if !found {
-		// TODO: Add fallback to get collaborator from API?
 		return nil, status.Errorf(codes.NotFound, "collaborator not found")
 	}
 	return &collaborator, nil
