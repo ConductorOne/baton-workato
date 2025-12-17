@@ -7,6 +7,7 @@ import (
 
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
+	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
 	"go.uber.org/zap"
@@ -19,9 +20,10 @@ import (
 )
 
 type collaboratorBuilder struct {
-	client *client.WorkatoClient
-	cache  *collaboratorCache
-	env    workato.Environment
+	client                 *client.WorkatoClient
+	cache                  *collaboratorCache
+	env                    workato.Environment
+	disableCustomRolesSync bool
 }
 
 func (o *collaboratorBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
@@ -85,11 +87,35 @@ func (o *collaboratorBuilder) Grants(ctx context.Context, resource *v2.Resource,
 			continue
 		}
 
-		roleResource := &v2.Resource{
-			Id: &v2.ResourceId{
-				ResourceType: roleResourceType.Id,
-				Resource:     "TODO", // TODO: Get role by name in cache
-			},
+		var roleResource *v2.Resource
+
+		switch {
+		case workato.IsBaseRole(role.RoleName):
+			baseRole, err := workato.GetBaseRole(resource.DisplayName)
+			if err != nil {
+				l.Error("failed to get base role %s", zap.String("role_name", resource.DisplayName), zap.Error(err))
+				return nil, nil, fmt.Errorf("failed to get base role: %w", err)
+			}
+			roleResource = &v2.Resource{
+				Id: &v2.ResourceId{
+					ResourceType: roleResourceType.Id,
+					Resource:     baseRole.RoleName,
+				},
+			}
+		case !o.disableCustomRolesSync:
+			role := getRoleByName(ctx, attr.Session, role.RoleName)
+			if role == nil {
+				return rv, nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("role %s (%d) not found", role.Name, role.Id))
+			}
+			roleResource = &v2.Resource{
+				Id: &v2.ResourceId{
+					ResourceType: roleResourceType.Id,
+					Resource:     strconv.Itoa(role.Id),
+				},
+			}
+		default:
+			l.Debug("skipping role %s because it is not a base role and custom roles sync is disabled", zap.String("role_name", role.RoleName))
+			continue
 		}
 
 		newGrant := grant.NewGrant(
@@ -168,10 +194,12 @@ func (o *collaboratorBuilder) Grants(ctx context.Context, resource *v2.Resource,
 	return rv, nil, nil
 }
 
-func newCollaboratorBuilder(client *client.WorkatoClient, env workato.Environment) *collaboratorBuilder {
+func newCollaboratorBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) *collaboratorBuilder {
 	return &collaboratorBuilder{
-		client: client,
-		cache:  newCollaboratorCache(client, env),
+		client:                 client,
+		cache:                  newCollaboratorCache(client, env),
+		env:                    env,
+		disableCustomRolesSync: disableCustomRolesSync,
 	}
 }
 
