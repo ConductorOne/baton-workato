@@ -94,7 +94,11 @@ func (o *collaboratorBuilder) Grants(ctx context.Context, resource *v2.Resource,
 
 	for _, collaboratorRole := range collaboratorRoles {
 		if collaboratorRole.EnvironmentType != o.env.String() {
-			l.Debug("Collaborator role environment type does not match, skipping", zap.String("collaborator_role_environment_type", collaboratorRole.EnvironmentType), zap.String("collaborator_role_name", collaboratorRole.Name))
+			l.Debug("Collaborator role environment type does not match, skipping",
+				zap.String("environment", collaboratorRole.EnvironmentType),
+				zap.String("collaborator_role_name", collaboratorRole.Name),
+				zap.String("expected_environment_type", o.env.String()),
+			)
 			continue
 		}
 
