@@ -23,7 +23,7 @@ func getRoleByFolder(ctx context.Context, sessionStorage sessions.SessionStore, 
 
 	folderRoles, found, err := session.GetJSON[[]*client.Role](ctx, sessionStorage, folderID, sessions.WithPrefix(folderRolesCachePrefix))
 	if err != nil {
-		l.Error("failed to get folder roles from session storage %s", zap.String("folder_id", folderID), zap.Error(err))
+		l.Error("failed to get folder roles from session storage", zap.String("folder_id", folderID), zap.Error(err))
 		return nil
 	}
 
@@ -39,7 +39,7 @@ func getRoleById(ctx context.Context, sessionStorage sessions.SessionStore, role
 
 	role, found, err := session.GetJSON[*client.Role](ctx, sessionStorage, roleID, sessions.WithPrefix(rolesCachePrefix))
 	if err != nil {
-		l.Error("failed to get role by id from session storage %s", zap.String("role_id", roleID), zap.Error(err))
+		l.Error("failed to get role by id from session storage", zap.String("role_id", roleID), zap.Error(err))
 		return nil
 	}
 
@@ -55,7 +55,7 @@ func getRoleByName(ctx context.Context, sessionStorage sessions.SessionStore, ro
 
 	role, found, err := session.GetJSON[*client.Role](ctx, sessionStorage, roleName, sessions.WithPrefix(rolesByNameCachePrefix))
 	if err != nil {
-		l.Error("failed to get role by name from session storage %s", zap.String("role_name", roleName), zap.Error(err))
+		l.Error("failed to get role by name from session storage", zap.String("role_name", roleName), zap.Error(err))
 		return nil
 	}
 
