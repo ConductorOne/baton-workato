@@ -38,6 +38,8 @@ func (c *collaboratorCache) setCollaboratorsCache(ctx context.Context, sessionSt
 	return nil
 }
 
+// getCollaborator gets a collaborator from the cache by id.
+// It is assumed that the cache is populated when listing resources and is only used when listing grants.
 func (c *collaboratorCache) getCollaborator(ctx context.Context, sessionStorage sessions.SessionStore, collaboratorId string) (*client.Collaborator, error) {
 	collaborator, found, err := session.GetJSON[client.Collaborator](ctx, sessionStorage, collaboratorId, sessions.WithPrefix(collaboratorNamespace))
 	if err != nil {

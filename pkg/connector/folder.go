@@ -12,7 +12,6 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/cpagination"
-	"github.com/conductorone/baton-workato/pkg/connector/workato"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
@@ -171,7 +170,7 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, attr 
 	}, nil
 }
 
-func newFolderBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) *folderBuilder {
+func newFolderBuilder(client *client.WorkatoClient, disableCustomRolesSync bool) *folderBuilder {
 	return &folderBuilder{
 		client:                 client,
 		cache:                  newCollaboratorCache(client),
