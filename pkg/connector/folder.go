@@ -98,7 +98,7 @@ func (o *folderBuilder) Entitlements(_ context.Context, resource *v2.Resource, _
 
 	assigmentOptions := []entitlement.EntitlementOption{
 		entitlement.WithGrantableTo(collaboratorResourceType),
-		entitlement.WithDescription(fmt.Sprintf("%s can acccess %s", collaboratorResourceType.DisplayName, resource.DisplayName)),
+		entitlement.WithDescription(fmt.Sprintf("%s can access %s", collaboratorResourceType.DisplayName, resource.DisplayName)),
 		entitlement.WithDisplayName(fmt.Sprintf("%s access %s", collaboratorResourceType.DisplayName, resource.DisplayName)),
 	}
 	rv = append(rv, entitlement.NewPermissionEntitlement(resource, collaboratorAccessEntitlement, assigmentOptions...))
