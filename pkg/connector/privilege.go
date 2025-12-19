@@ -29,8 +29,7 @@ func (o *privilegeBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 	return privilegeResourceType
 }
 
-// List returns all the users from the database as resource objects.
-// Users include a UserTrait because they are the 'shape' of a standard user.
+// List returns all the privileges.
 func (o *privilegeBuilder) List(ctx context.Context, _ *v2.ResourceId, _ rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
 	l := ctxzap.Extract(ctx)
 	l.Debug("Listing privileges")
@@ -50,7 +49,7 @@ func (o *privilegeBuilder) List(ctx context.Context, _ *v2.ResourceId, _ rs.Sync
 	return rv, nil, nil
 }
 
-// Entitlements always returns an empty slice for users.
+// Entitlements returns an entitlement for the privilege to be assigned to a collaborator.
 func (o *privilegeBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ rs.SyncOpAttrs) ([]*v2.Entitlement, *rs.SyncOpResults, error) {
 	var rv []*v2.Entitlement
 	assigmentOptions := []entitlement.EntitlementOption{
@@ -63,12 +62,12 @@ func (o *privilegeBuilder) Entitlements(_ context.Context, resource *v2.Resource
 	return rv, nil, nil
 }
 
-// Grants always returns an empty slice for users since they don't have any entitlements.
-func (o *privilegeBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
+// Grants returns an empty slice. Grants for privileges are emitted when listing collaborator grants.
+func (o *privilegeBuilder) Grants(_ context.Context, _ *v2.Resource, _ rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
 	return nil, nil, nil
 }
 
-func newPrivilegeBuilder(client *client.WorkatoClient, env workato.Environment) *privilegeBuilder {
+func newPrivilegeBuilder(client *client.WorkatoClient) *privilegeBuilder {
 	return &privilegeBuilder{
 		client: client,
 		cache:  newCollaboratorCache(client),
