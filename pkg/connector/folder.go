@@ -12,7 +12,6 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/cpagination"
-	"github.com/conductorone/baton-workato/pkg/connector/workato"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
@@ -99,8 +98,8 @@ func (o *folderBuilder) Entitlements(_ context.Context, resource *v2.Resource, _
 
 	assigmentOptions := []entitlement.EntitlementOption{
 		entitlement.WithGrantableTo(collaboratorResourceType),
-		entitlement.WithDescription(fmt.Sprintf("%s can acess %s", collaboratorResourceType.DisplayName, resource.DisplayName)),
-		entitlement.WithDisplayName(fmt.Sprintf("%s acess %s", collaboratorResourceType.DisplayName, resource.DisplayName)),
+		entitlement.WithDescription(fmt.Sprintf("%s can access %s", collaboratorResourceType.DisplayName, resource.DisplayName)),
+		entitlement.WithDisplayName(fmt.Sprintf("%s access %s", collaboratorResourceType.DisplayName, resource.DisplayName)),
 	}
 	rv = append(rv, entitlement.NewPermissionEntitlement(resource, collaboratorAccessEntitlement, assigmentOptions...))
 
@@ -121,11 +120,6 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, attr 
 
 	if bag.Current() == nil {
 		bag.Push(Bag{
-			ResourceTypeID: collaboratorResourceType.Id,
-			Page:           0,
-		})
-
-		bag.Push(Bag{
 			ResourceTypeID: roleResourceType.Id,
 			Page:           0,
 		})
@@ -143,28 +137,6 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, attr 
 	state := bag.Pop()
 
 	var rv []*v2.Grant
-
-	if state.ResourceTypeID == collaboratorResourceType.Id {
-		folderId := resource.Id.Resource
-		collaborators := o.cache.getUsersByFolder(ctx, attr.Session, folderId)
-
-		for _, collaborator := range collaborators {
-			collaboratorId, err := rs.NewResourceID(collaboratorResourceType, collaborator.User.Id)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			// Collaborator only access to the folder if a role have access
-			// To update collaborator folder access, the role must be updated
-			newGrant := grant.NewGrant(
-				resource,
-				collaboratorAccessEntitlement,
-				collaboratorId,
-				grant.WithAnnotation(&v2.GrantImmutable{}),
-			)
-			rv = append(rv, newGrant)
-		}
-	}
 
 	if state.ResourceTypeID == roleResourceType.Id && !o.disableCustomRolesSync {
 		folderId := resource.Id.Resource
@@ -198,10 +170,10 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, attr 
 	}, nil
 }
 
-func newFolderBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) *folderBuilder {
+func newFolderBuilder(client *client.WorkatoClient, disableCustomRolesSync bool) *folderBuilder {
 	return &folderBuilder{
 		client:                 client,
-		cache:                  newCollaboratorCache(client, env),
+		cache:                  newCollaboratorCache(client),
 		disableCustomRolesSync: disableCustomRolesSync,
 	}
 }

@@ -15,6 +15,7 @@ import (
 const (
 	rolesCachePrefix       = "roles"
 	folderRolesCachePrefix = "folder_roles"
+	rolesByNameCachePrefix = "roles_by_name"
 )
 
 func getRoleByFolder(ctx context.Context, sessionStorage sessions.SessionStore, folderID string) []*client.Role {
@@ -22,7 +23,7 @@ func getRoleByFolder(ctx context.Context, sessionStorage sessions.SessionStore, 
 
 	folderRoles, found, err := session.GetJSON[[]*client.Role](ctx, sessionStorage, folderID, sessions.WithPrefix(folderRolesCachePrefix))
 	if err != nil {
-		l.Error("failed to get folder roles from session storage", zap.Error(err))
+		l.Error("failed to get folder roles from session storage", zap.String("folder_id", folderID), zap.Error(err))
 		return nil
 	}
 
@@ -38,7 +39,23 @@ func getRoleById(ctx context.Context, sessionStorage sessions.SessionStore, role
 
 	role, found, err := session.GetJSON[*client.Role](ctx, sessionStorage, roleID, sessions.WithPrefix(rolesCachePrefix))
 	if err != nil {
-		l.Error("failed to get role by id from session storage", zap.Error(err))
+		l.Error("failed to get role by id from session storage", zap.String("role_id", roleID), zap.Error(err))
+		return nil
+	}
+
+	if !found {
+		return nil
+	}
+
+	return role
+}
+
+func getRoleByName(ctx context.Context, sessionStorage sessions.SessionStore, roleName string) *client.Role {
+	l := ctxzap.Extract(ctx)
+
+	role, found, err := session.GetJSON[*client.Role](ctx, sessionStorage, roleName, sessions.WithPrefix(rolesByNameCachePrefix))
+	if err != nil {
+		l.Error("failed to get role by name from session storage", zap.String("role_name", roleName), zap.Error(err))
 		return nil
 	}
 
@@ -51,18 +68,20 @@ func getRoleById(ctx context.Context, sessionStorage sessions.SessionStore, role
 
 func setRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, roles []client.Role) error {
 	if len(roles) > 0 {
-		err := session.SetManyJSON(ctx, sessionStorage, parseJSONRolesCache(roles), sessions.WithPrefix("roles"))
+		err := session.SetManyJSON(ctx, sessionStorage, parseJSONRolesCache(roles), sessions.WithPrefix(rolesCachePrefix))
 		if err != nil {
 			return fmt.Errorf("failed to set roles cache in session storage: %w", err)
 		}
 	}
 
 	var mapRoles = make(map[string][]*client.Role)
+	var mapRolesByName = make(map[string]*client.Role)
 
 	for _, role := range roles {
+		copyRole := role
+
 		for _, folderID := range role.FolderIDs {
 			folderIDStr := strconv.Itoa(folderID)
-			copyRole := role
 
 			if roles, ok := mapRoles[folderIDStr]; ok {
 				roles = append(roles, &copyRole)
@@ -71,12 +90,21 @@ func setRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, ro
 				mapRoles[folderIDStr] = []*client.Role{&copyRole}
 			}
 		}
+
+		mapRolesByName[copyRole.Name] = &copyRole
 	}
 
 	if (len(mapRoles)) > 0 {
-		err := session.SetManyJSON(ctx, sessionStorage, mapRoles, sessions.WithPrefix("folder_roles"))
+		err := session.SetManyJSON(ctx, sessionStorage, mapRoles, sessions.WithPrefix(folderRolesCachePrefix))
 		if err != nil {
 			return fmt.Errorf("failed to set folder roles in session storage: %w", err)
+		}
+	}
+
+	if (len(mapRolesByName)) > 0 {
+		err := session.SetManyJSON(ctx, sessionStorage, mapRolesByName, sessions.WithPrefix(rolesByNameCachePrefix))
+		if err != nil {
+			return fmt.Errorf("failed to set roles by name in session storage: %w", err)
 		}
 	}
 

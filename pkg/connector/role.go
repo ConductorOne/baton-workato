@@ -8,6 +8,7 @@ import (
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
@@ -23,10 +24,13 @@ var (
 	collaboratorHasRoleEntitlement = "collaborator-has"
 )
 
+var _ connectorbuilder.ResourceSyncerV2 = (*roleBuilder)(nil)
+var _ connectorbuilder.ResourceProvisionerV2Limited = (*roleBuilder)(nil)
+
 type roleBuilder struct {
 	client                 *client.WorkatoClient
-	env                    workato.Environment
 	cache                  *collaboratorCache
+	env                    workato.Environment
 	disableCustomRolesSync bool
 }
 
@@ -36,7 +40,7 @@ func (o *roleBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 
 // List returns all the users from the database as resource objects.
 // Users include a UserTrait because they are the 'shape' of a standard user.
-func (o *roleBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
+func (o *roleBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
 	l := ctxzap.Extract(ctx)
 	l.Debug("Listing roles")
 
@@ -83,7 +87,7 @@ func (o *roleBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOp
 }
 
 // Entitlements always returns an empty slice for users.
-func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ rs.SyncOpAttrs) ([]*v2.Entitlement, *rs.SyncOpResults, error) {
+func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, attr rs.SyncOpAttrs) ([]*v2.Entitlement, *rs.SyncOpResults, error) {
 	var rv []*v2.Entitlement
 	assigmentOptions := []entitlement.EntitlementOption{
 		entitlement.WithGrantableTo(collaboratorResourceType),
@@ -95,38 +99,10 @@ func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ r
 	return rv, nil, nil
 }
 
-// Grants returns collaborator-has grants and derived privilege grants for base and custom roles.
+// Grants always returns an empty slice for users since they don't have any entitlements.
 func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
 	l := ctxzap.Extract(ctx)
-
-	// Since roles names are unique, we can use the role name as the key to get all the users that have that role.
-	collaborators := o.cache.getUsersByRole(ctx, attr.Session, resource.DisplayName)
-
 	rv := make([]*v2.Grant, 0)
-
-	for _, collaborator := range collaborators {
-		collaboratorId, err := rs.NewResourceID(collaboratorResourceType, collaborator.User.Id)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		for _, roleCollab := range collaborator.User.Roles {
-			if roleCollab.RoleName != resource.DisplayName {
-				continue
-			}
-
-			newGrant := grant.NewGrant(
-				resource,
-				collaboratorHasRoleEntitlement,
-				collaboratorId,
-				grant.WithGrantMetadata(map[string]interface{}{
-					"environment_type": roleCollab.EnvironmentType,
-				}),
-			)
-
-			rv = append(rv, newGrant)
-		}
-	}
 
 	// Base Roles - privilege grants implementation
 	if workato.IsBaseRole(resource.DisplayName) {
@@ -160,12 +136,15 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs
 
 			rv = append(rv, newGrant)
 		}
-	} else if !o.disableCustomRolesSync {
+		return rv, nil, nil
+	}
+
+	if !o.disableCustomRolesSync {
 		// privilege grants implementation
 		role := getRoleById(ctx, attr.Session, resource.Id.Resource)
 		if role == nil {
 			l.Warn("role not found", zap.String("role_name", resource.DisplayName), zap.String("role_id", resource.Id.Resource))
-			return nil, nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("role %s (%s) not found", resource.DisplayName, resource.Id.Resource))
+			return rv, nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("role %s (%s) not found", resource.DisplayName, resource.Id.Resource))
 		}
 
 		privileges, err := workato.FindRelatedPrivilegesErr(role.Privileges)
@@ -268,18 +247,18 @@ func (o *roleBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlem
 		return grants, nil, nil
 	}
 
-	return nil, nil, fmt.Errorf("baton-workato grant not implemented for resource type %s", resource.Id.ResourceType)
+	return nil, nil, fmt.Errorf("grant not implemented for %s", resource.Id.ResourceType)
 }
 
 func (o *roleBuilder) Revoke(_ context.Context, grant *v2.Grant) (annotations.Annotations, error) {
-	return nil, fmt.Errorf("baton-workato revoke not implemented for resource type %s", grant.Principal.Id.ResourceType)
+	return nil, fmt.Errorf("revoke not implemented for %s", grant.Principal.Id.ResourceType)
 }
 
 func newRoleBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) *roleBuilder {
 	return &roleBuilder{
 		client:                 client,
+		cache:                  newCollaboratorCache(client),
 		env:                    env,
-		cache:                  newCollaboratorCache(client, env),
 		disableCustomRolesSync: disableCustomRolesSync,
 	}
 }

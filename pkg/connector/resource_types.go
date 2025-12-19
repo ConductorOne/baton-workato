@@ -10,12 +10,12 @@ var collaboratorResourceType = &v2.ResourceType{
 	Id:          "collaborator",
 	DisplayName: "Collaborator",
 	Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
-	Annotations: annotations.New(&v2.SkipEntitlementsAndGrants{}),
 }
 
 var privilegeResourceType = &v2.ResourceType{
 	Id:          "privilege",
 	DisplayName: "Privilege",
+	Annotations: annotations.New(&v2.SkipGrants{}),
 }
 
 var roleResourceType = &v2.ResourceType{
@@ -32,4 +32,5 @@ var folderResourceType = &v2.ResourceType{
 var projectResourceType = &v2.ResourceType{
 	Id:          "project",
 	DisplayName: "Project",
+	Annotations: annotations.New(&v2.SkipEntitlementsAndGrants{}),
 }
