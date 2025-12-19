@@ -1,72 +1,77 @@
 {
-  "@type":  "type.googleapis.com/c1.connector.v2.ConnectorCapabilities",
-  "resourceTypeCapabilities":  [
+  "@type": "type.googleapis.com/c1.connector.v2.ConnectorCapabilities",
+  "resourceTypeCapabilities": [
     {
-      "resourceType":  {
-        "id":  "collaborator",
-        "displayName":  "Collaborator",
-        "traits":  [
+      "resourceType": {
+        "id": "collaborator",
+        "displayName": "Collaborator",
+        "traits": [
           "TRAIT_USER"
-        ],
-        "annotations":  [
+        ]
+      },
+      "capabilities": [
+        "CAPABILITY_SYNC"
+      ],
+      "permissions": {}
+    },
+    {
+      "resourceType": {
+        "id": "folder",
+        "displayName": "Folder"
+      },
+      "capabilities": [
+        "CAPABILITY_SYNC"
+      ],
+      "permissions": {}
+    },
+    {
+      "resourceType": {
+        "id": "privilege",
+        "displayName": "Privilege",
+        "annotations": [
           {
-            "@type":  "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
+            "@type": "type.googleapis.com/c1.connector.v2.SkipGrants"
           }
         ]
       },
-      "capabilities":  [
+      "capabilities": [
         "CAPABILITY_SYNC"
       ],
-      "permissions":  {}
+      "permissions": {}
     },
     {
-      "resourceType":  {
-        "id":  "folder",
-        "displayName":  "Folder"
+      "resourceType": {
+        "id": "project",
+        "displayName": "Project",
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
+          }
+        ]
       },
-      "capabilities":  [
+      "capabilities": [
         "CAPABILITY_SYNC"
       ],
-      "permissions":  {}
+      "permissions": {}
     },
     {
-      "resourceType":  {
-        "id":  "privilege",
-        "displayName":  "Privilege"
-      },
-      "capabilities":  [
-        "CAPABILITY_SYNC"
-      ],
-      "permissions":  {}
-    },
-    {
-      "resourceType":  {
-        "id":  "project",
-        "displayName":  "Project"
-      },
-      "capabilities":  [
-        "CAPABILITY_SYNC"
-      ],
-      "permissions":  {}
-    },
-    {
-      "resourceType":  {
-        "id":  "role",
-        "displayName":  "Roles",
-        "traits":  [
+      "resourceType": {
+        "id": "role",
+        "displayName": "Roles",
+        "traits": [
           "TRAIT_ROLE"
         ]
       },
-      "capabilities":  [
+      "capabilities": [
         "CAPABILITY_SYNC",
         "CAPABILITY_PROVISION"
       ],
-      "permissions":  {}
+      "permissions": {}
     }
   ],
-  "connectorCapabilities":  [
+  "connectorCapabilities": [
     "CAPABILITY_PROVISION",
     "CAPABILITY_SYNC"
   ],
-  "credentialDetails":  {}
+  "credentialDetails": {}
 }
