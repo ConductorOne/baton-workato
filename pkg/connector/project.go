@@ -3,12 +3,15 @@ package connector
 import (
 	"context"
 
+	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 )
+
+var _ connectorbuilder.ResourceSyncerV2 = (*projectBuilder)(nil)
 
 type projectBuilder struct {
 	client *client.WorkatoClient

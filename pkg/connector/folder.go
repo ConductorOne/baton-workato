@@ -8,6 +8,7 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 
+	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
@@ -20,6 +21,8 @@ import (
 const (
 	collaboratorAccessEntitlement = "collaborator-access"
 )
+
+var _ connectorbuilder.ResourceSyncerV2 = (*folderBuilder)(nil)
 
 type folderBuilder struct {
 	client                 *client.WorkatoClient

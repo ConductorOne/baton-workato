@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
@@ -16,6 +17,8 @@ import (
 const (
 	assignedEntitlement = "assigned"
 )
+
+var _ connectorbuilder.ResourceSyncerV2 = (*privilegeBuilder)(nil)
 
 type privilegeBuilder struct {
 	client *client.WorkatoClient
