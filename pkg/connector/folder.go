@@ -34,7 +34,7 @@ func (o *folderBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 	return folderResourceType
 }
 
-// List returns all the folders and project folders..
+// List returns all the folders and project folders.
 func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
 	l := ctxzap.Extract(ctx)
 	l.Debug("Listing folders")

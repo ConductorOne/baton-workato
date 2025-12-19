@@ -46,7 +46,7 @@ func (o *projectBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.Syn
 	}, nil
 }
 
-// Entitlements returns an an empty slice since projects are not assignable.
+// Entitlements returns an empty slice since projects are not assignable.
 func (o *projectBuilder) Entitlements(_ context.Context, _ *v2.Resource, _ rs.SyncOpAttrs) ([]*v2.Entitlement, *rs.SyncOpResults, error) {
 	return nil, nil, nil
 }
