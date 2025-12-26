@@ -38,9 +38,8 @@ func (o *roleBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 	return roleResourceType
 }
 
-// List returns all the users from the database as resource objects.
-// Users include a UserTrait because they are the 'shape' of a standard user.
-func (o *roleBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
+// List returns all the Workato base roles and custom roles.
+func (o *roleBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
 	l := ctxzap.Extract(ctx)
 	l.Debug("Listing roles")
 
@@ -86,8 +85,8 @@ func (o *roleBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId,
 	}, nil
 }
 
-// Entitlements always returns an empty slice for users.
-func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, attr rs.SyncOpAttrs) ([]*v2.Entitlement, *rs.SyncOpResults, error) {
+// Entitlements returns an entitlement for the role to be assigned to a collaborator.
+func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ rs.SyncOpAttrs) ([]*v2.Entitlement, *rs.SyncOpResults, error) {
 	var rv []*v2.Entitlement
 	assigmentOptions := []entitlement.EntitlementOption{
 		entitlement.WithGrantableTo(collaboratorResourceType),
@@ -99,7 +98,7 @@ func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, att
 	return rv, nil, nil
 }
 
-// Grants always returns an empty slice for users since they don't have any entitlements.
+// Grants returns the privileges granted to a role.
 func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
 	l := ctxzap.Extract(ctx)
 	rv := make([]*v2.Grant, 0)

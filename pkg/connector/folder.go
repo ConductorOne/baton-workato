@@ -8,6 +8,7 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 
+	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
@@ -21,6 +22,8 @@ const (
 	collaboratorAccessEntitlement = "collaborator-access"
 )
 
+var _ connectorbuilder.ResourceSyncerV2 = (*folderBuilder)(nil)
+
 type folderBuilder struct {
 	client                 *client.WorkatoClient
 	cache                  *collaboratorCache
@@ -31,8 +34,7 @@ func (o *folderBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 	return folderResourceType
 }
 
-// List returns all the users from the database as resource objects.
-// Users include a UserTrait because they are the 'shape' of a standard user.
+// List returns all the folders and project folders.
 func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
 	l := ctxzap.Extract(ctx)
 	l.Debug("Listing folders")
@@ -92,7 +94,7 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 	return nil, nil, nil
 }
 
-// Entitlements always returns an empty slice for users.
+// Entitlements returns an entitlement for the folder to be assigned to a collaborator.
 func (o *folderBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ rs.SyncOpAttrs) ([]*v2.Entitlement, *rs.SyncOpResults, error) {
 	var rv []*v2.Entitlement
 
@@ -106,7 +108,7 @@ func (o *folderBuilder) Entitlements(_ context.Context, resource *v2.Resource, _
 	return rv, nil, nil
 }
 
-// Grants always returns an empty slice for users since they don't have any entitlements.
+// Grants returns the roles granted to a folder.
 func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
 	type Bag struct {
 		ResourceTypeID string
