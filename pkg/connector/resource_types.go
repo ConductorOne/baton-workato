@@ -39,4 +39,5 @@ var environmentResourceType = &v2.ResourceType{
 	Id:          "environment",
 	DisplayName: "Environment",
 	Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_GROUP},
+	Annotations: annotations.New(&v2.SkipEntitlementsAndGrants{}),
 }

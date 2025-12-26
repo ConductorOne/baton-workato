@@ -35,3 +35,24 @@ func EnvFromString(env string) (Environment, error) {
 		return "", uhttp.WrapErrors(codes.InvalidArgument, fmt.Sprintf("baton-workato invalid environment '%s', must be one of: prod, test, dev", env))
 	}
 }
+
+func EnvironmentDisplayName(env Environment) (string, error) {
+	switch env {
+	case Production:
+		return "Production", nil
+	case Test:
+		return "Test", nil
+	case Development:
+		return "Development", nil
+	default:
+		return "", fmt.Errorf("invalid environment '%s'", env)
+	}
+}
+
+func AllEnvironments() []Environment {
+	return []Environment{
+		Production,
+		Test,
+		Development,
+	}
+}

@@ -31,32 +31,21 @@ func (o *environmentBuilder) List(ctx context.Context, _ *v2.ResourceId, _ rs.Sy
 	rv := make([]*v2.Resource, 0)
 
 	if o.env == workato.All {
-		// Return all three environments
-		devRes, err := environmentResource(workato.Development)
-		if err != nil {
-			return nil, nil, err
+		for _, env := range workato.AllEnvironments() {
+			resource, err := environmentResource(env)
+			if err != nil {
+				return nil, nil, err
+			}
+			rv = append(rv, resource)
 		}
-		rv = append(rv, devRes)
-
-		testRes, err := environmentResource(workato.Test)
-		if err != nil {
-			return nil, nil, err
-		}
-		rv = append(rv, testRes)
-
-		prodRes, err := environmentResource(workato.Production)
-		if err != nil {
-			return nil, nil, err
-		}
-		rv = append(rv, prodRes)
-	} else {
-		// Return only the specific environment
-		envRes, err := environmentResource(o.env)
-		if err != nil {
-			return nil, nil, err
-		}
-		rv = append(rv, envRes)
+		return rv, nil, nil
 	}
+
+	resource, err := environmentResource(o.env)
+	if err != nil {
+		return nil, nil, err
+	}
+	rv = append(rv, resource)
 
 	return rv, nil, nil
 }
@@ -78,16 +67,9 @@ func newEnvironmentBuilder(env workato.Environment) *environmentBuilder {
 }
 
 func environmentResource(env workato.Environment) (*v2.Resource, error) {
-	var displayName string
-	switch env {
-	case workato.Development:
-		displayName = "Development"
-	case workato.Test:
-		displayName = "Test"
-	case workato.Production:
-		displayName = "Production"
-	default:
-		displayName = string(env)
+	displayName, err := workato.EnvironmentDisplayName(env)
+	if err != nil {
+		return nil, err
 	}
 
 	profile := map[string]interface{}{
@@ -111,4 +93,3 @@ func environmentResource(env workato.Environment) (*v2.Resource, error) {
 
 	return ret, nil
 }
-
