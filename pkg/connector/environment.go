@@ -86,6 +86,11 @@ func environmentResource(env workato.Environment) (*v2.Resource, error) {
 		environmentResourceType,
 		env.String(),
 		traits,
+		rs.WithAnnotation(
+			&v2.ChildResourceType{
+				ResourceTypeId: roleResourceType.Id,
+			},
+		),
 	)
 	if err != nil {
 		return nil, err
