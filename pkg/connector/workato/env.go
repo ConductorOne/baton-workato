@@ -17,6 +17,8 @@ var (
 	Production  Environment = "prod"
 	Test        Environment = "test"
 	Development Environment = "dev"
+	// All is used internally to sync all environments. It is not a valid workato environment.
+	All Environment = "all"
 )
 
 func EnvFromString(env string) (Environment, error) {
@@ -27,6 +29,8 @@ func EnvFromString(env string) (Environment, error) {
 		return Test, nil
 	case Development.String():
 		return Development, nil
+	case All.String():
+		return All, nil
 	default:
 		return "", uhttp.WrapErrors(codes.InvalidArgument, fmt.Sprintf("baton-workato invalid environment '%s', must be one of: prod, test, dev", env))
 	}

@@ -96,7 +96,7 @@ func (o *collaboratorBuilder) Grants(ctx context.Context, resource *v2.Resource,
 	}
 
 	for _, collaboratorRole := range collaboratorRoles {
-		if collaboratorRole.EnvironmentType != o.env.String() {
+		if o.env != workato.All && collaboratorRole.EnvironmentType != o.env.String() {
 			l.Debug("Collaborator role environment type does not match, skipping",
 				zap.String("environment", collaboratorRole.EnvironmentType),
 				zap.String("collaborator_role_name", collaboratorRole.Name),
@@ -177,7 +177,7 @@ func (o *collaboratorBuilder) collaboratorRoleGrants(ctx context.Context, sessio
 
 	// Build for roles
 	for _, role := range collaborator.Roles {
-		if role.EnvironmentType != o.env.String() {
+		if o.env != workato.All && role.EnvironmentType != o.env.String() {
 			continue
 		}
 
