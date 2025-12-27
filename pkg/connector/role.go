@@ -39,9 +39,20 @@ func (o *roleBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 }
 
 // List returns all the Workato base roles and custom roles.
-func (o *roleBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
+func (o *roleBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
 	l := ctxzap.Extract(ctx)
 	l.Debug("Listing roles")
+
+	if parentResourceID != nil {
+		// For backward compatibility, only generate roles per parent environment if all environments are synced in case the sync environment capability is off.
+		if o.env != workato.All {
+			return nil, nil, nil
+		}
+
+		if parentResourceID.ResourceType != environmentResourceType.Id {
+			return nil, nil, fmt.Errorf("invalid parent resource type: %s", parentResourceID.ResourceType)
+		}
+	}
 
 	rv := make([]*v2.Resource, 0)
 
@@ -62,7 +73,7 @@ func (o *roleBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOp
 		}
 
 		for _, role := range roles {
-			us, err := roleResource(&role)
+			us, err := roleResource(&role, parentResourceID)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -72,7 +83,7 @@ func (o *roleBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOp
 
 	// Add base roles
 	for _, role := range workato.BaseRoles {
-		us, err := workatoBaseRoleResource(&role)
+		us, err := workatoBaseRoleResource(&role, parentResourceID)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -198,9 +209,27 @@ func (o *roleBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlem
 
 		roles := toSimpleRole(collaborator)
 
+		roleTrait, err := rs.GetRoleTrait(entitlement.Resource)
+		if err != nil {
+			return nil, nil, err
+		}
+		profile := roleTrait.GetProfile()
+		if profile == nil {
+			return nil, nil, fmt.Errorf("role profile not found")
+		}
+		// For backward compatibility, fallback to use configured environment if the profile value does not exist.
+		environmentType := o.env.String()
+		environmentVal, ok := profile.AsMap()["environment"]
+		if ok {
+			environmentType, ok = environmentVal.(string)
+			if !ok {
+				return nil, nil, fmt.Errorf("environment value is not a string")
+			}
+		}
+
 		newRole := client.SimpleRole{
 			RoleName:        roleName,
-			EnvironmentType: o.env.String(),
+			EnvironmentType: environmentType,
 		}
 
 		index := slices.IndexFunc(roles, func(other client.SimpleRole) bool {
@@ -262,7 +291,7 @@ func newRoleBuilder(client *client.WorkatoClient, env workato.Environment, disab
 	}
 }
 
-func roleResource(role *client.Role) (*v2.Resource, error) {
+func roleResource(role *client.Role, parentResourceId *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
 		"id":          role.Id,
 		"name":        role.Name,
@@ -270,9 +299,17 @@ func roleResource(role *client.Role) (*v2.Resource, error) {
 		"inheritable": role.Inheritable,
 		"updated_at":  role.UpdatedAt.String(),
 	}
+	if parentResourceId != nil {
+		profile["environment"] = parentResourceId.Resource
+	}
 
 	traits := []rs.RoleTraitOption{
 		rs.WithRoleProfile(profile),
+	}
+
+	opts := []rs.ResourceOption{}
+	if parentResourceId != nil {
+		opts = append(opts, rs.WithParentResourceID(parentResourceId))
 	}
 
 	ret, err := rs.NewRoleResource(
@@ -280,6 +317,7 @@ func roleResource(role *client.Role) (*v2.Resource, error) {
 		roleResourceType,
 		role.Id,
 		traits,
+		opts...,
 	)
 	if err != nil {
 		return nil, err
@@ -288,14 +326,22 @@ func roleResource(role *client.Role) (*v2.Resource, error) {
 	return ret, nil
 }
 
-func workatoBaseRoleResource(role *workato.Role) (*v2.Resource, error) {
+func workatoBaseRoleResource(role *workato.Role, parentResourceId *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
 		"id":   role.RoleName,
 		"name": role.RoleName,
 	}
+	if parentResourceId != nil {
+		profile["environment"] = parentResourceId.Resource
+	}
 
 	traits := []rs.RoleTraitOption{
 		rs.WithRoleProfile(profile),
+	}
+
+	opts := []rs.ResourceOption{}
+	if parentResourceId != nil {
+		opts = append(opts, rs.WithParentResourceID(parentResourceId))
 	}
 
 	ret, err := rs.NewRoleResource(
@@ -303,6 +349,7 @@ func workatoBaseRoleResource(role *workato.Role) (*v2.Resource, error) {
 		roleResourceType,
 		role.RoleName,
 		traits,
+		opts...,
 	)
 	if err != nil {
 		return nil, err
