@@ -43,17 +43,6 @@ func (o *roleBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId,
 	l := ctxzap.Extract(ctx)
 	l.Debug("Listing roles")
 
-	if parentResourceID != nil {
-		// For backward compatibility, only generate roles per parent environment if all environments are synced in case the sync environment capability is off.
-		if o.env != workato.All {
-			return nil, nil, nil
-		}
-
-		if parentResourceID.ResourceType != environmentResourceType.Id {
-			return nil, nil, fmt.Errorf("invalid parent resource type: %s", parentResourceID.ResourceType)
-		}
-	}
-
 	rv := make([]*v2.Resource, 0)
 
 	var nextToken string
