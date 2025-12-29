@@ -251,7 +251,7 @@ func (o *roleBuilder) Grant(ctx context.Context, principal *v2.Resource, entitle
 		collaboratorHasRoleEntitlement,
 		principal.Id,
 		grant.WithGrantMetadata(map[string]interface{}{
-			"environment_type": o.env.String(),
+			"environment_type": environmentType,
 		}),
 	)
 
