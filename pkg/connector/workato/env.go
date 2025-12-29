@@ -36,6 +36,7 @@ func EnvFromString(env string) (Environment, error) {
 	}
 }
 
+// EnvironmentDisplayName returns the display name for a workato environment.
 func EnvironmentDisplayName(env Environment) (string, error) {
 	switch env {
 	case Production:
@@ -49,6 +50,7 @@ func EnvironmentDisplayName(env Environment) (string, error) {
 	}
 }
 
+// AllEnvironments returns all the valid workato environments.
 func AllEnvironments() []Environment {
 	return []Environment{
 		Production,
