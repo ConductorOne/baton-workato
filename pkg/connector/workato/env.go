@@ -32,7 +32,7 @@ func EnvFromString(env string) (Environment, error) {
 	case All.String():
 		return All, nil
 	default:
-		return "", uhttp.WrapErrors(codes.InvalidArgument, fmt.Sprintf("baton-workato invalid environment '%s', must be one of: prod, test, dev", env))
+		return "", uhttp.WrapErrors(codes.InvalidArgument, fmt.Sprintf("baton-workato invalid environment '%s', must be one of: prod, test, dev or all", env))
 	}
 }
 
