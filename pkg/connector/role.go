@@ -47,6 +47,13 @@ func (o *roleBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId,
 
 	var nextToken string
 
+	var envs []workato.Environment
+	if o.env == workato.All {
+		envs = workato.AllEnvironments()
+	} else {
+		envs = append(envs, o.env)
+	}
+
 	if !o.disableCustomRolesSync {
 		var roles []client.Role
 		var err error
@@ -61,28 +68,22 @@ func (o *roleBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId,
 			return nil, nil, err
 		}
 
-		for _, role := range roles {
-			us, err := roleResource(&role, parentResourceID)
-			if err != nil {
-				return nil, nil, err
+		for _, targetEnv := range envs {
+			for _, role := range roles {
+				us, err := roleResource(&role, o.env, targetEnv)
+				if err != nil {
+					return nil, nil, err
+				}
+				rv = append(rv, us)
 			}
-			rv = append(rv, us)
 		}
 	}
 
 	if nextToken == "" {
 		// Add base roles
-		var envs []workato.Environment
-
-		if o.env == workato.All {
-			envs = workato.AllEnvironments()
-		} else {
-			envs = append(envs, o.env)
-		}
-
-		for _, env := range envs {
+		for _, targetEnv := range envs {
 			for _, role := range workato.BaseRoles {
-				us, err := workatoBaseRoleResource(&role, o.env, env)
+				us, err := workatoBaseRoleResource(&role, o.env, targetEnv)
 				if err != nil {
 					return nil, nil, err
 				}
@@ -291,33 +292,39 @@ func newRoleBuilder(client *client.WorkatoClient, env workato.Environment, disab
 	}
 }
 
-func roleResource(role *client.Role, parentResourceId *v2.ResourceId) (*v2.Resource, error) {
+func roleResource(role *client.Role, envConfig workato.Environment, targetEnv workato.Environment) (*v2.Resource, error) {
+	if targetEnv == workato.All {
+		return nil, fmt.Errorf("target environment %s is not supported for role resources", targetEnv.String())
+	}
+
+	id := strconv.Itoa(role.Id)
+	name := role.Name
+
+	// For backward compatibility, do not change the role IDs if the environment is set to a specific environment.
+	if envConfig == workato.All {
+		id = fmt.Sprintf("%s-%s", id, targetEnv.String())
+		name = fmt.Sprintf("%s (%s)", role.Name, targetEnv.String())
+	}
+
 	profile := map[string]interface{}{
-		"id":          role.Id,
-		"name":        role.Name,
+		"id":          id,
+		"name":        name,
+		"role_name":   role.Name,
+		"environment": targetEnv.String(),
 		"create_at":   role.CreatedAt.String(),
 		"inheritable": role.Inheritable,
 		"updated_at":  role.UpdatedAt.String(),
-	}
-	if parentResourceId != nil {
-		profile["environment"] = parentResourceId.Resource
 	}
 
 	traits := []rs.RoleTraitOption{
 		rs.WithRoleProfile(profile),
 	}
 
-	opts := []rs.ResourceOption{}
-	if parentResourceId != nil {
-		opts = append(opts, rs.WithParentResourceID(parentResourceId))
-	}
-
 	ret, err := rs.NewRoleResource(
-		role.Name,
+		name,
 		roleResourceType,
-		role.Id,
+		id,
 		traits,
-		opts...,
 	)
 	if err != nil {
 		return nil, err
