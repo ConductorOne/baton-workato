@@ -3,7 +3,6 @@ package connector
 import (
 	"context"
 	"fmt"
-	"slices"
 	"strconv"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -200,89 +199,70 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs
 	return rv, nil, nil
 }
 
-func (o *roleBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlement *v2.Entitlement) ([]*v2.Grant, annotations.Annotations, error) {
-	// Grant a role to a collaborator
-	if resource.Id.ResourceType == collaboratorResourceType.Id {
-		grants := make([]*v2.Grant, 0)
-
-		userID, err := strconv.Atoi(resource.Id.Resource)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		collaborator, err := o.client.GetCollaboratorPrivileges(ctx, userID)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		roles := toSimpleRole(collaborator)
-
-		roleTrait, err := rs.GetRoleTrait(entitlement.Resource)
-		if err != nil {
-			return nil, nil, err
-		}
-		profile := roleTrait.GetProfile()
-		if profile == nil {
-			return nil, nil, fmt.Errorf("role profile not found")
-		}
-		roleName, ok := profile.AsMap()["name"].(string)
-		if !ok {
-			return nil, nil, fmt.Errorf("role name is missing or invalid")
-		}
-		environmentType, ok := profile.AsMap()["environment"].(string)
-		if !ok {
-			return nil, nil, fmt.Errorf("environment value is missing or invalid")
-		}
-
-		newRole := client.SimpleRole{
-			RoleName:        roleName,
-			EnvironmentType: environmentType,
-		}
-
-		index := slices.IndexFunc(roles, func(other client.SimpleRole) bool {
-			return other.Equals(newRole)
-		})
-
-		if index >= 0 {
-			return []*v2.Grant{}, annotations.New(&v2.GrantAlreadyExists{}), nil
-		}
-
-		// Workato just accept one role per environment
-		sameEnvIndex := slices.IndexFunc(roles, func(other client.SimpleRole) bool {
-			return other.EnvironmentType == o.env.String()
-		})
-
-		if sameEnvIndex >= 0 {
-			roles[sameEnvIndex] = newRole
-		} else {
-			roles = append(roles, newRole)
-		}
-
-		err = o.client.UpdateCollaboratorRoles(ctx, userID, roles)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		collaboratorId, err := rs.NewResourceID(collaboratorResourceType, userID)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		newGrant := grant.NewGrant(
-			resource,
-			collaboratorHasRoleEntitlement,
-			collaboratorId,
-			grant.WithGrantMetadata(map[string]interface{}{
-				"environment_type": o.env.String(),
-			}),
-		)
-
-		grants = append(grants, newGrant)
-
-		return grants, nil, nil
+func (o *roleBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) ([]*v2.Grant, annotations.Annotations, error) {
+	if principal.Id.ResourceType != collaboratorResourceType.Id {
+		return nil, nil, fmt.Errorf("grant not implemented for %s", principal.Id.ResourceType)
 	}
 
-	return nil, nil, fmt.Errorf("grant not implemented for %s", resource.Id.ResourceType)
+	// Grant a role to a collaborator
+	userID, err := strconv.Atoi(principal.Id.Resource)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	grants := make([]*v2.Grant, 0)
+
+	collaborator, err := o.client.GetCollaboratorPrivileges(ctx, userID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	roles := toSimpleRole(collaborator)
+
+	roleTrait, err := rs.GetRoleTrait(entitlement.Resource)
+	if err != nil {
+		return nil, nil, err
+	}
+	profile := roleTrait.GetProfile()
+	if profile == nil {
+		return nil, nil, fmt.Errorf("role profile not found")
+	}
+	roleName, ok := profile.AsMap()["name"].(string)
+	if !ok {
+		return nil, nil, fmt.Errorf("role name is missing or invalid")
+	}
+	environmentType, ok := profile.AsMap()["environment"].(string)
+	if !ok {
+		return nil, nil, fmt.Errorf("environment value is missing or invalid")
+	}
+
+	roles = append(roles, client.SimpleRole{
+		RoleName:        roleName,
+		EnvironmentType: environmentType,
+	})
+
+	err = o.client.UpdateCollaboratorRoles(ctx, userID, roles)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	collaboratorId, err := rs.NewResourceID(collaboratorResourceType, userID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	newGrant := grant.NewGrant(
+		principal,
+		collaboratorHasRoleEntitlement,
+		collaboratorId,
+		grant.WithGrantMetadata(map[string]interface{}{
+			"environment_type": o.env.String(),
+		}),
+	)
+
+	grants = append(grants, newGrant)
+
+	return grants, nil, nil
 }
 
 func (o *roleBuilder) Revoke(_ context.Context, grant *v2.Grant) (annotations.Annotations, error) {
