@@ -211,15 +211,6 @@ func (o *roleBuilder) Grant(ctx context.Context, principal *v2.Resource, entitle
 		return nil, nil, err
 	}
 
-	grants := make([]*v2.Grant, 0)
-
-	collaborator, err := o.client.GetCollaboratorPrivileges(ctx, userID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	roles := toSimpleRole(collaborator)
-
 	roleTrait, err := rs.GetRoleTrait(entitlement.Resource)
 	if err != nil {
 		return nil, nil, err
@@ -237,10 +228,12 @@ func (o *roleBuilder) Grant(ctx context.Context, principal *v2.Resource, entitle
 		return nil, nil, fmt.Errorf("environment value is missing or invalid")
 	}
 
-	roles = append(roles, client.SimpleRole{
-		RoleName:        roleName,
-		EnvironmentType: environmentType,
-	})
+	roles := []client.SimpleRole{
+		{
+			RoleName:        roleName,
+			EnvironmentType: environmentType,
+		},
+	}
 
 	l := ctxzap.Extract(ctx)
 	rolesJSON, err := json.Marshal(roles)
@@ -262,9 +255,7 @@ func (o *roleBuilder) Grant(ctx context.Context, principal *v2.Resource, entitle
 		}),
 	)
 
-	grants = append(grants, newGrant)
-
-	return grants, nil, nil
+	return []*v2.Grant{newGrant}, nil, nil
 }
 
 func (o *roleBuilder) Revoke(_ context.Context, grant *v2.Grant) (annotations.Annotations, error) {
