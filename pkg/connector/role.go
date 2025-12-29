@@ -225,7 +225,7 @@ func (o *roleBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlem
 		if profile == nil {
 			return nil, nil, fmt.Errorf("role profile not found")
 		}
-		roleName, ok := profile.AsMap()["role_name"].(string)
+		roleName, ok := profile.AsMap()["name"].(string)
 		if !ok {
 			return nil, nil, fmt.Errorf("role name is missing or invalid")
 		}
