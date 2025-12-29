@@ -72,12 +72,22 @@ func (o *roleBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId,
 
 	if nextToken == "" {
 		// Add base roles
-		for _, role := range workato.BaseRoles {
-			us, err := workatoBaseRoleResource(&role, parentResourceID)
-			if err != nil {
-				return nil, nil, err
+		var envs []workato.Environment
+
+		if o.env == workato.All {
+			envs = workato.AllEnvironments()
+		} else {
+			envs = append(envs, o.env)
+		}
+
+		for _, env := range envs {
+			for _, role := range workato.BaseRoles {
+				us, err := workatoBaseRoleResource(&role, o.env, env)
+				if err != nil {
+					return nil, nil, err
+				}
+				rv = append(rv, us)
 			}
-			rv = append(rv, us)
 		}
 	}
 
@@ -316,22 +326,32 @@ func roleResource(role *client.Role, parentResourceId *v2.ResourceId) (*v2.Resou
 	return ret, nil
 }
 
-func workatoBaseRoleResource(role *workato.Role, parentResourceId *v2.ResourceId) (*v2.Resource, error) {
-	profile := map[string]interface{}{
-		"id":   role.RoleName,
-		"name": role.RoleName,
+// workatoBaseRoleResource creates a new role resource for a base role.
+// envConfig is the environment configured for the connector.
+// targetEnv is the environment to create the role resource for.
+func workatoBaseRoleResource(role *workato.Role, envConfig workato.Environment, targetEnv workato.Environment) (*v2.Resource, error) {
+	if targetEnv == workato.All {
+		return nil, fmt.Errorf("target environment %s is not supported for base roles", targetEnv.String())
 	}
-	if parentResourceId != nil {
-		profile["environment"] = parentResourceId.Resource
+
+	id := role.RoleName
+	name := role.RoleName
+
+	// For backward compatibility, do not change the role IDs if the environment is set to a specific environment.
+	if envConfig == workato.All {
+		id = fmt.Sprintf("%s-%s", role.RoleName, targetEnv.String())
+		name = fmt.Sprintf("%s (%s)", role.RoleName, targetEnv.String())
+	}
+
+	profile := map[string]interface{}{
+		"id":          id,
+		"name":        name,
+		"role_name":   role.RoleName,
+		"environment": targetEnv.String(),
 	}
 
 	traits := []rs.RoleTraitOption{
 		rs.WithRoleProfile(profile),
-	}
-
-	opts := []rs.ResourceOption{}
-	if parentResourceId != nil {
-		opts = append(opts, rs.WithParentResourceID(parentResourceId))
 	}
 
 	ret, err := rs.NewRoleResource(
@@ -339,7 +359,6 @@ func workatoBaseRoleResource(role *workato.Role, parentResourceId *v2.ResourceId
 		roleResourceType,
 		role.RoleName,
 		traits,
-		opts...,
 	)
 	if err != nil {
 		return nil, err
