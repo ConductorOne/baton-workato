@@ -70,14 +70,15 @@ func (o *roleBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId,
 		}
 	}
 
-	// Add base roles
-	for _, role := range workato.BaseRoles {
-		us, err := workatoBaseRoleResource(&role, parentResourceID)
-		if err != nil {
-			return nil, nil, err
+	if nextToken == "" {
+		// Add base roles
+		for _, role := range workato.BaseRoles {
+			us, err := workatoBaseRoleResource(&role, parentResourceID)
+			if err != nil {
+				return nil, nil, err
+			}
+			rv = append(rv, us)
 		}
-
-		rv = append(rv, us)
 	}
 
 	return rv, &rs.SyncOpResults{
