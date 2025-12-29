@@ -197,7 +197,6 @@ func (o *roleBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlem
 	if resource.Id.ResourceType == collaboratorResourceType.Id {
 		grants := make([]*v2.Grant, 0)
 
-		roleName := entitlement.Resource.Id.Resource
 		userID, err := strconv.Atoi(resource.Id.Resource)
 		if err != nil {
 			return nil, nil, err
@@ -218,14 +217,13 @@ func (o *roleBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlem
 		if profile == nil {
 			return nil, nil, fmt.Errorf("role profile not found")
 		}
-		// For backward compatibility, fallback to use configured environment if the profile value does not exist.
-		environmentType := o.env.String()
-		environmentVal, ok := profile.AsMap()["environment"]
-		if ok {
-			environmentType, ok = environmentVal.(string)
-			if !ok {
-				return nil, nil, fmt.Errorf("environment value is not a string")
-			}
+		roleName, ok := profile.AsMap()["role_name"].(string)
+		if !ok {
+			return nil, nil, fmt.Errorf("role name is missing or invalid")
+		}
+		environmentType, ok := profile.AsMap()["environment"].(string)
+		if !ok {
+			return nil, nil, fmt.Errorf("environment value is missing or invalid")
 		}
 
 		newRole := client.SimpleRole{
