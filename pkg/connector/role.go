@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -241,12 +242,13 @@ func (o *roleBuilder) Grant(ctx context.Context, principal *v2.Resource, entitle
 		EnvironmentType: environmentType,
 	})
 
-	err = o.client.UpdateCollaboratorRoles(ctx, userID, roles)
+	l := ctxzap.Extract(ctx)
+	rolesJSON, err := json.Marshal(roles)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	collaboratorId, err := rs.NewResourceID(collaboratorResourceType, userID)
+	l.Info("Updating collaborator roles", zap.Int("user_id", userID), zap.String("roles", string(rolesJSON)))
+	err = o.client.UpdateCollaboratorRoles(ctx, userID, roles)
 	if err != nil {
 		return nil, nil, err
 	}
