@@ -163,6 +163,8 @@ func collaboratorPrivilegeGrant(group string, privilege string, principalID *v2.
 func (o *collaboratorBuilder) collaboratorRoleGrants(ctx context.Context, session sessions.SessionStore, principalID *v2.ResourceId) ([]*v2.Grant, error) {
 	l := ctxzap.Extract(ctx)
 
+	useLegacyRoleIds := o.env != workato.All
+
 	if principalID.ResourceType != collaboratorResourceType.Id {
 		return nil, fmt.Errorf("principal ID is not a collaborator")
 	}
@@ -190,10 +192,14 @@ func (o *collaboratorBuilder) collaboratorRoleGrants(ctx context.Context, sessio
 				l.Error("failed to get base role %s", zap.String("role_name", role.RoleName), zap.Error(err))
 				return nil, fmt.Errorf("failed to get base role: %w", err)
 			}
+			roleId := workato.RoleResourceID(baseRole.RoleName, role.EnvironmentType)
+			if useLegacyRoleIds {
+				roleId = baseRole.RoleName
+			}
 			roleResource = &v2.Resource{
 				Id: &v2.ResourceId{
 					ResourceType: roleResourceType.Id,
-					Resource:     baseRole.RoleName,
+					Resource:     roleId,
 				},
 			}
 		case !o.disableCustomRolesSync:
@@ -201,10 +207,15 @@ func (o *collaboratorBuilder) collaboratorRoleGrants(ctx context.Context, sessio
 			if customRole == nil {
 				return nil, fmt.Errorf("custom role %s not found", role.RoleName)
 			}
+			customRoleId := strconv.Itoa(customRole.Id)
+			roleId := workato.RoleResourceID(customRoleId, role.EnvironmentType)
+			if useLegacyRoleIds {
+				roleId = customRoleId
+			}
 			roleResource = &v2.Resource{
 				Id: &v2.ResourceId{
 					ResourceType: roleResourceType.Id,
-					Resource:     strconv.Itoa(customRole.Id),
+					Resource:     roleId,
 				},
 			}
 		default:

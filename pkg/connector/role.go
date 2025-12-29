@@ -300,7 +300,7 @@ func roleResource(role *client.Role, envConfig workato.Environment, targetEnv wo
 
 	// For backward compatibility, do not change the role IDs if the environment is set to a specific environment.
 	if envConfig == workato.All {
-		id = fmt.Sprintf("%s-%s", id, targetEnv.String())
+		id = workato.RoleResourceID(id, targetEnv.String())
 		name = fmt.Sprintf("%s (%s)", role.Name, targetEnv.String())
 	}
 
@@ -344,7 +344,7 @@ func workatoBaseRoleResource(role *workato.Role, envConfig workato.Environment, 
 
 	// For backward compatibility, do not change the role IDs if the environment is set to a specific environment.
 	if envConfig == workato.All {
-		id = fmt.Sprintf("%s-%s", role.RoleName, targetEnv.String())
+		id = workato.RoleResourceID(role.RoleName, targetEnv.String())
 		name = fmt.Sprintf("%s (%s)", role.RoleName, targetEnv.String())
 	}
 
