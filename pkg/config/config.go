@@ -20,10 +20,11 @@ var (
 		field.WithDefaultValue("us"),
 	)
 
-	WorkatoEnv = field.StringField(
+	WorkatoEnv = field.SelectField(
 		"workato-env",
+		[]string{"dev", "test", "prod", "all"},
 		field.WithDisplayName("Environment"),
-		field.WithDescription("Your workato environment (dev, test, prod, all) default is 'dev'"),
+		field.WithDescription("Your workato environment (dev, test, prod, all)"),
 		field.WithDefaultValue("dev"),
 	)
 
