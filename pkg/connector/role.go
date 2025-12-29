@@ -34,6 +34,14 @@ type roleBuilder struct {
 	disableCustomRolesSync bool
 }
 
+func GetRoleResourceID(roleId string, targetEnv workato.Environment, configEnv workato.Environment) string {
+	// For backward compatibility, do not change the role IDs if the environment configuration is set to a specific environment.
+	if configEnv != workato.All {
+		return roleId
+	}
+	return fmt.Sprintf("%s-%s", roleId, targetEnv.String())
+}
+
 func (o *roleBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 	return roleResourceType
 }
@@ -296,18 +304,10 @@ func roleResource(role *client.Role, envConfig workato.Environment, targetEnv wo
 	}
 
 	id := strconv.Itoa(role.Id)
-	name := role.Name
-
-	// For backward compatibility, do not change the role IDs if the environment is set to a specific environment.
-	if envConfig == workato.All {
-		id = workato.RoleResourceID(id, targetEnv.String())
-		name = fmt.Sprintf("%s (%s)", role.Name, targetEnv.String())
-	}
 
 	profile := map[string]interface{}{
 		"id":          id,
-		"name":        name,
-		"role_name":   role.Name,
+		"name":        role.Name,
 		"environment": targetEnv.String(),
 		"create_at":   role.CreatedAt.String(),
 		"inheritable": role.Inheritable,
@@ -319,9 +319,9 @@ func roleResource(role *client.Role, envConfig workato.Environment, targetEnv wo
 	}
 
 	ret, err := rs.NewRoleResource(
-		name,
+		fmt.Sprintf("%s (%s)", role.Name, targetEnv.String()),
 		roleResourceType,
-		id,
+		GetRoleResourceID(id, targetEnv, envConfig),
 		traits,
 	)
 	if err != nil {
@@ -339,19 +339,9 @@ func workatoBaseRoleResource(role *workato.Role, envConfig workato.Environment, 
 		return nil, fmt.Errorf("target environment %s is not supported for base roles", targetEnv.String())
 	}
 
-	id := role.RoleName
-	name := role.RoleName
-
-	// For backward compatibility, do not change the role IDs if the environment is set to a specific environment.
-	if envConfig == workato.All {
-		id = workato.RoleResourceID(role.RoleName, targetEnv.String())
-		name = fmt.Sprintf("%s (%s)", role.RoleName, targetEnv.String())
-	}
-
 	profile := map[string]interface{}{
-		"id":          id,
-		"name":        name,
-		"role_name":   role.RoleName,
+		"id":          role.RoleName,
+		"name":        role.RoleName,
 		"environment": targetEnv.String(),
 	}
 
@@ -360,9 +350,9 @@ func workatoBaseRoleResource(role *workato.Role, envConfig workato.Environment, 
 	}
 
 	ret, err := rs.NewRoleResource(
-		role.RoleName,
+		fmt.Sprintf("%s (%s)", role.RoleName, targetEnv.String()),
 		roleResourceType,
-		role.RoleName,
+		GetRoleResourceID(role.RoleName, targetEnv, envConfig),
 		traits,
 	)
 	if err != nil {

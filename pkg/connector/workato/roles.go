@@ -9,10 +9,6 @@ type Role struct {
 	Privileges []CompoundPrivilege `json:"privileges"`
 }
 
-func RoleResourceID(roleName string, env string) string {
-	return fmt.Sprintf("%s-%s", roleName, env)
-}
-
 var BaseRoles = []Role{
 	AdminRole,
 	AnalystRole,
