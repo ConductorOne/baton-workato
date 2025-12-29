@@ -334,12 +334,3 @@ func workatoBaseRoleResource(role *workato.Role, envConfig workato.Environment, 
 
 	return ret, nil
 }
-
-func toSimpleRole(collaboratorRoles []*client.CollaboratorPrivilege) []client.SimpleRole {
-	roles := make([]client.SimpleRole, 0)
-	for _, role := range collaboratorRoles {
-		roles = append(roles, role.SimpleRole())
-	}
-
-	return roles
-}
