@@ -16,11 +16,13 @@ var (
 	// WorkatoDataCenters
 	// https://docs.workato.com/workato-api.html#base-url
 	WorkatoDataCenters = map[string]string{
-		"us": "https://www.workato.com",
-		"eu": "https://app.eu.workato.com",
-		"jp": "https://app.jp.workato.com",
-		"sg": "https://app.sg.workato.com",
-		"au": "https://app.au.workato.com",
+		"us":      "https://www.workato.com",
+		"eu":      "https://app.eu.workato.com",
+		"jp":      "https://app.jp.workato.com",
+		"sg":      "https://app.sg.workato.com",
+		"au":      "https://app.au.workato.com",
+		"il":      "https://app.il.workato.com",
+		"sandbox": "https://app.trial.workato.com",
 	}
 )
 
