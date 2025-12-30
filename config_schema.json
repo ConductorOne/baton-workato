@@ -79,17 +79,36 @@
     {
       "name": "workato-data-center",
       "displayName": "Data center",
-      "description": "Your workato data center (us, eu, jp, sg, au) default is 'us' see more on https://docs.workato.com/workato-api.html#base-url",
+      "description": "Your workato data center (us, eu, jp, sg, au, il, sandbox). See more on https://docs.workato.com/workato-api.html#base-url",
       "stringField": {
-        "defaultValue": "us"
+        "defaultValue": "us",
+        "rules": {
+          "in": [
+            "us",
+            "eu",
+            "jp",
+            "sg",
+            "au",
+            "il",
+            "sandbox"
+          ]
+        }
       }
     },
     {
       "name": "workato-env",
       "displayName": "Environment",
-      "description": "Your workato environment (dev, test, prod) default is 'dev'",
+      "description": "Your workato environment (dev, test, prod, all)",
       "stringField": {
-        "defaultValue": "dev"
+        "defaultValue": "dev",
+        "rules": {
+          "in": [
+            "dev",
+            "test",
+            "prod",
+            "all"
+          ]
+        }
       }
     }
   ],
