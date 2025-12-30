@@ -2,8 +2,8 @@ package connector
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"slices"
 	"strconv"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -34,6 +34,14 @@ type roleBuilder struct {
 	disableCustomRolesSync bool
 }
 
+func GetRoleResourceID(roleId string, targetEnv workato.Environment, configEnv workato.Environment) string {
+	// For backward compatibility, do not change the role IDs if the environment configuration is set to a specific environment.
+	if configEnv != workato.All {
+		return roleId
+	}
+	return fmt.Sprintf("%s-%s", roleId, targetEnv.String())
+}
+
 func (o *roleBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 	return roleResourceType
 }
@@ -46,6 +54,13 @@ func (o *roleBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOp
 	rv := make([]*v2.Resource, 0)
 
 	var nextToken string
+
+	var envs []workato.Environment
+	if o.env == workato.All {
+		envs = workato.AllEnvironments()
+	} else {
+		envs = append(envs, o.env)
+	}
 
 	if !o.disableCustomRolesSync {
 		var roles []client.Role
@@ -61,23 +76,28 @@ func (o *roleBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOp
 			return nil, nil, err
 		}
 
-		for _, role := range roles {
-			us, err := roleResource(&role)
-			if err != nil {
-				return nil, nil, err
+		for _, targetEnv := range envs {
+			for _, role := range roles {
+				us, err := roleResource(&role, o.env, targetEnv)
+				if err != nil {
+					return nil, nil, err
+				}
+				rv = append(rv, us)
 			}
-			rv = append(rv, us)
 		}
 	}
 
-	// Add base roles
-	for _, role := range workato.BaseRoles {
-		us, err := workatoBaseRoleResource(&role)
-		if err != nil {
-			return nil, nil, err
+	if nextToken == "" {
+		// Add base roles
+		for _, targetEnv := range envs {
+			for _, role := range workato.BaseRoles {
+				us, err := workatoBaseRoleResource(&role, o.env, targetEnv)
+				if err != nil {
+					return nil, nil, err
+				}
+				rv = append(rv, us)
+			}
 		}
-
-		rv = append(rv, us)
 	}
 
 	return rv, &rs.SyncOpResults{
@@ -180,73 +200,62 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs
 	return rv, nil, nil
 }
 
-func (o *roleBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlement *v2.Entitlement) ([]*v2.Grant, annotations.Annotations, error) {
-	// Grant a role to a collaborator
-	if resource.Id.ResourceType == collaboratorResourceType.Id {
-		grants := make([]*v2.Grant, 0)
-
-		roleName := entitlement.Resource.Id.Resource
-		userID, err := strconv.Atoi(resource.Id.Resource)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		collaborator, err := o.client.GetCollaboratorPrivileges(ctx, userID)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		roles := toSimpleRole(collaborator)
-
-		newRole := client.SimpleRole{
-			RoleName:        roleName,
-			EnvironmentType: o.env.String(),
-		}
-
-		index := slices.IndexFunc(roles, func(other client.SimpleRole) bool {
-			return other.Equals(newRole)
-		})
-
-		if index >= 0 {
-			return []*v2.Grant{}, annotations.New(&v2.GrantAlreadyExists{}), nil
-		}
-
-		// Workato just accept one role per environment
-		sameEnvIndex := slices.IndexFunc(roles, func(other client.SimpleRole) bool {
-			return other.EnvironmentType == o.env.String()
-		})
-
-		if sameEnvIndex >= 0 {
-			roles[sameEnvIndex] = newRole
-		} else {
-			roles = append(roles, newRole)
-		}
-
-		err = o.client.UpdateCollaboratorRoles(ctx, userID, roles)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		collaboratorId, err := rs.NewResourceID(collaboratorResourceType, userID)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		newGrant := grant.NewGrant(
-			resource,
-			collaboratorHasRoleEntitlement,
-			collaboratorId,
-			grant.WithGrantMetadata(map[string]interface{}{
-				"environment_type": o.env.String(),
-			}),
-		)
-
-		grants = append(grants, newGrant)
-
-		return grants, nil, nil
+func (o *roleBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) ([]*v2.Grant, annotations.Annotations, error) {
+	if principal.Id.ResourceType != collaboratorResourceType.Id {
+		return nil, nil, fmt.Errorf("grant not implemented for %s", principal.Id.ResourceType)
 	}
 
-	return nil, nil, fmt.Errorf("grant not implemented for %s", resource.Id.ResourceType)
+	// Grant a role to a collaborator
+	userID, err := strconv.Atoi(principal.Id.Resource)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	roleTrait, err := rs.GetRoleTrait(entitlement.Resource)
+	if err != nil {
+		return nil, nil, err
+	}
+	profile := roleTrait.GetProfile()
+	if profile == nil {
+		return nil, nil, fmt.Errorf("role profile not found")
+	}
+	roleName, ok := profile.AsMap()["name"].(string)
+	if !ok {
+		return nil, nil, fmt.Errorf("role name is missing or invalid")
+	}
+	environmentType, ok := profile.AsMap()["environment"].(string)
+	if !ok {
+		return nil, nil, fmt.Errorf("environment value is missing or invalid")
+	}
+
+	roles := []client.SimpleRole{
+		{
+			RoleName:        roleName,
+			EnvironmentType: environmentType,
+		},
+	}
+
+	l := ctxzap.Extract(ctx)
+	rolesJSON, err := json.Marshal(roles)
+	if err != nil {
+		return nil, nil, err
+	}
+	l.Info("Updating collaborator roles", zap.Int("user_id", userID), zap.String("roles", string(rolesJSON)))
+	err = o.client.UpdateCollaboratorRoles(ctx, userID, roles)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	newGrant := grant.NewGrant(
+		entitlement.Resource,
+		collaboratorHasRoleEntitlement,
+		principal.Id,
+		grant.WithGrantMetadata(map[string]interface{}{
+			"environment_type": environmentType,
+		}),
+	)
+
+	return []*v2.Grant{newGrant}, nil, nil
 }
 
 func (o *roleBuilder) Revoke(_ context.Context, grant *v2.Grant) (annotations.Annotations, error) {
@@ -262,10 +271,17 @@ func newRoleBuilder(client *client.WorkatoClient, env workato.Environment, disab
 	}
 }
 
-func roleResource(role *client.Role) (*v2.Resource, error) {
+func roleResource(role *client.Role, envConfig workato.Environment, targetEnv workato.Environment) (*v2.Resource, error) {
+	if targetEnv == workato.All {
+		return nil, fmt.Errorf("target environment %s is not supported for role resources", targetEnv.String())
+	}
+
+	id := strconv.Itoa(role.Id)
+
 	profile := map[string]interface{}{
-		"id":          role.Id,
+		"id":          id,
 		"name":        role.Name,
+		"environment": targetEnv.String(),
 		"create_at":   role.CreatedAt.String(),
 		"inheritable": role.Inheritable,
 		"updated_at":  role.UpdatedAt.String(),
@@ -276,9 +292,9 @@ func roleResource(role *client.Role) (*v2.Resource, error) {
 	}
 
 	ret, err := rs.NewRoleResource(
-		role.Name,
+		fmt.Sprintf("%s (%s)", role.Name, targetEnv.String()),
 		roleResourceType,
-		role.Id,
+		GetRoleResourceID(id, targetEnv, envConfig),
 		traits,
 	)
 	if err != nil {
@@ -288,10 +304,18 @@ func roleResource(role *client.Role) (*v2.Resource, error) {
 	return ret, nil
 }
 
-func workatoBaseRoleResource(role *workato.Role) (*v2.Resource, error) {
+// workatoBaseRoleResource creates a new role resource for a base role.
+// envConfig is the environment configured for the connector.
+// targetEnv is the environment to create the role resource for.
+func workatoBaseRoleResource(role *workato.Role, envConfig workato.Environment, targetEnv workato.Environment) (*v2.Resource, error) {
+	if targetEnv == workato.All {
+		return nil, fmt.Errorf("target environment %s is not supported for base roles", targetEnv.String())
+	}
+
 	profile := map[string]interface{}{
-		"id":   role.RoleName,
-		"name": role.RoleName,
+		"id":          role.RoleName,
+		"name":        role.RoleName,
+		"environment": targetEnv.String(),
 	}
 
 	traits := []rs.RoleTraitOption{
@@ -299,9 +323,9 @@ func workatoBaseRoleResource(role *workato.Role) (*v2.Resource, error) {
 	}
 
 	ret, err := rs.NewRoleResource(
-		role.RoleName,
+		fmt.Sprintf("%s (%s)", role.RoleName, targetEnv.String()),
 		roleResourceType,
-		role.RoleName,
+		GetRoleResourceID(role.RoleName, targetEnv, envConfig),
 		traits,
 	)
 	if err != nil {
@@ -309,13 +333,4 @@ func workatoBaseRoleResource(role *workato.Role) (*v2.Resource, error) {
 	}
 
 	return ret, nil
-}
-
-func toSimpleRole(collaboratorRoles []*client.CollaboratorPrivilege) []client.SimpleRole {
-	roles := make([]client.SimpleRole, 0)
-	for _, role := range collaboratorRoles {
-		roles = append(roles, role.SimpleRole())
-	}
-
-	return roles
 }

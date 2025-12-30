@@ -96,7 +96,7 @@ func (o *collaboratorBuilder) Grants(ctx context.Context, resource *v2.Resource,
 	}
 
 	for _, collaboratorRole := range collaboratorRoles {
-		if collaboratorRole.EnvironmentType != o.env.String() {
+		if o.env != workato.All && collaboratorRole.EnvironmentType != o.env.String() {
 			l.Debug("Collaborator role environment type does not match, skipping",
 				zap.String("environment", collaboratorRole.EnvironmentType),
 				zap.String("collaborator_role_name", collaboratorRole.Name),
@@ -177,7 +177,7 @@ func (o *collaboratorBuilder) collaboratorRoleGrants(ctx context.Context, sessio
 
 	// Build for roles
 	for _, role := range collaborator.Roles {
-		if role.EnvironmentType != o.env.String() {
+		if o.env != workato.All && role.EnvironmentType != o.env.String() {
 			continue
 		}
 
@@ -190,10 +190,15 @@ func (o *collaboratorBuilder) collaboratorRoleGrants(ctx context.Context, sessio
 				l.Error("failed to get base role %s", zap.String("role_name", role.RoleName), zap.Error(err))
 				return nil, fmt.Errorf("failed to get base role: %w", err)
 			}
+			targetEnv, err := workato.EnvFromString(role.EnvironmentType)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get target environment from role environment type: %w", err)
+			}
+			roleId := GetRoleResourceID(baseRole.RoleName, targetEnv, o.env)
 			roleResource = &v2.Resource{
 				Id: &v2.ResourceId{
 					ResourceType: roleResourceType.Id,
-					Resource:     baseRole.RoleName,
+					Resource:     roleId,
 				},
 			}
 		case !o.disableCustomRolesSync:
@@ -201,10 +206,16 @@ func (o *collaboratorBuilder) collaboratorRoleGrants(ctx context.Context, sessio
 			if customRole == nil {
 				return nil, fmt.Errorf("custom role %s not found", role.RoleName)
 			}
+			customRoleId := strconv.Itoa(customRole.Id)
+			targetEnv, err := workato.EnvFromString(role.EnvironmentType)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get target environment from role environment type: %w", err)
+			}
+			roleId := GetRoleResourceID(customRoleId, targetEnv, o.env)
 			roleResource = &v2.Resource{
 				Id: &v2.ResourceId{
 					ResourceType: roleResourceType.Id,
-					Resource:     strconv.Itoa(customRole.Id),
+					Resource:     roleId,
 				},
 			}
 		default:

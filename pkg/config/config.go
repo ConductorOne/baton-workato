@@ -13,17 +13,19 @@ var (
 		field.WithIsSecret(true),
 	)
 
-	WorkatoDataCenterFiekd = field.StringField(
+	WorkatoDataCenterFiekd = field.SelectField(
 		"workato-data-center",
+		[]string{"us", "eu", "jp", "sg", "au", "il", "sandbox"},
 		field.WithDisplayName("Data center"),
-		field.WithDescription("Your workato data center (us, eu, jp, sg, au) default is 'us' see more on https://docs.workato.com/workato-api.html#base-url"),
+		field.WithDescription("Your workato data center (us, eu, jp, sg, au, il, sandbox). See more on https://docs.workato.com/workato-api.html#base-url"),
 		field.WithDefaultValue("us"),
 	)
 
-	WorkatoEnv = field.StringField(
+	WorkatoEnv = field.SelectField(
 		"workato-env",
+		[]string{"dev", "test", "prod", "all"},
 		field.WithDisplayName("Environment"),
-		field.WithDescription("Your workato environment (dev, test, prod) default is 'dev'"),
+		field.WithDescription("Your workato environment (dev, test, prod, all)"),
 		field.WithDefaultValue("dev"),
 	)
 

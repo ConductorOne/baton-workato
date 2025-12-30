@@ -17,6 +17,8 @@ var (
 	Production  Environment = "prod"
 	Test        Environment = "test"
 	Development Environment = "dev"
+	// All is used internally to sync all environments. It is not a valid workato environment.
+	All Environment = "all"
 )
 
 func EnvFromString(env string) (Environment, error) {
@@ -27,7 +29,32 @@ func EnvFromString(env string) (Environment, error) {
 		return Test, nil
 	case Development.String():
 		return Development, nil
+	case All.String():
+		return All, nil
 	default:
-		return "", uhttp.WrapErrors(codes.InvalidArgument, fmt.Sprintf("baton-workato invalid environment '%s', must be one of: prod, test, dev", env))
+		return "", uhttp.WrapErrors(codes.InvalidArgument, fmt.Sprintf("baton-workato invalid environment '%s', must be one of: prod, test, dev or all", env))
+	}
+}
+
+// EnvironmentDisplayName returns the display name for a workato environment.
+func EnvironmentDisplayName(env Environment) (string, error) {
+	switch env {
+	case Production:
+		return "Production", nil
+	case Test:
+		return "Test", nil
+	case Development:
+		return "Development", nil
+	default:
+		return "", fmt.Errorf("invalid environment '%s'", env)
+	}
+}
+
+// AllEnvironments returns all the valid workato environments.
+func AllEnvironments() []Environment {
+	return []Environment{
+		Production,
+		Test,
+		Development,
 	}
 }
