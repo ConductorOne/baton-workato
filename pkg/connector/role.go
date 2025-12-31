@@ -123,9 +123,26 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs
 	l := ctxzap.Extract(ctx)
 	rv := make([]*v2.Grant, 0)
 
+	roleTrait, err := rs.GetRoleTrait(resource)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get role trait: %w", err)
+	}
+	profile := roleTrait.GetProfile()
+	if profile == nil {
+		return nil, nil, fmt.Errorf("role profile not found on resource %s", resource.Id.Resource)
+	}
+	roleId, ok := profile.AsMap()["id"].(string)
+	if !ok {
+		return nil, nil, fmt.Errorf("role id not found on resource %s", resource.Id.Resource)
+	}
+	roleName, ok := profile.AsMap()["name"].(string)
+	if !ok {
+		return nil, nil, fmt.Errorf("role name not found on resource %s", resource.Id.Resource)
+	}
+
 	// Base Roles - privilege grants implementation
-	if workato.IsBaseRole(resource.DisplayName) {
-		role, err := workato.GetBaseRole(resource.DisplayName)
+	if workato.IsBaseRole(roleName) {
+		role, err := workato.GetBaseRole(roleName)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -160,10 +177,10 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs
 
 	if !o.disableCustomRolesSync {
 		// privilege grants implementation
-		role := getRoleById(ctx, attr.Session, resource.Id.Resource)
+		role := getRoleById(ctx, attr.Session, roleId)
 		if role == nil {
-			l.Warn("role not found", zap.String("role_name", resource.DisplayName), zap.String("role_id", resource.Id.Resource))
-			return rv, nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("role %s (%s) not found", resource.DisplayName, resource.Id.Resource))
+			l.Warn("role not found", zap.String("role_name", resource.DisplayName), zap.String("role_id", roleId))
+			return rv, nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("role %s (%s) not found", resource.DisplayName, roleId))
 		}
 
 		privileges, err := workato.FindRelatedPrivilegesErr(role.Privileges)

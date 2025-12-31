@@ -20,6 +20,10 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 )
 
+const (
+	noAccessRoleName = "No access"
+)
+
 var _ connectorbuilder.ResourceSyncerV2 = (*collaboratorBuilder)(nil)
 
 type collaboratorBuilder struct {
@@ -201,6 +205,8 @@ func (o *collaboratorBuilder) collaboratorRoleGrants(ctx context.Context, sessio
 					Resource:     roleId,
 				},
 			}
+		case role.RoleName == noAccessRoleName:
+			continue
 		case !o.disableCustomRolesSync:
 			customRole := getRoleByName(ctx, session, role.RoleName)
 			if customRole == nil {
