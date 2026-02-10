@@ -2,7 +2,7 @@
 
 #
 
-`baton-workato` [![Go Reference](https://pkg.go.dev/badge/github.com/conductorone/baton-workato.svg)](https://pkg.go.dev/github.com/conductorone/baton-workato) ![main ci](https://github.com/conductorone/baton-workato/actions/workflows/main.yaml/badge.svg)
+`baton-workato` [![Go Reference](https://pkg.go.dev/badge/github.com/conductorone/baton-workato.svg)](https://pkg.go.dev/github.com/conductorone/baton-workato) ![ci](https://github.com/conductorone/baton-workato/actions/workflows/ci.yaml/badge.svg) ![verify](https://github.com/conductorone/baton-workato/actions/workflows/verify.yaml/badge.svg)
 
 `baton-workato` is a connector for built using the [Baton SDK](https://github.com/conductorone/baton-sdk).
 
