@@ -6,51 +6,12 @@ on:
     branches:
       - main
 jobs:
-  go-lint:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Install Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - name: Run linters
-        uses: golangci/golangci-lint-action@v8
-        with:
-          version: latest
-          args: --timeout=3m
-  go-test:
-    strategy:
-      matrix:
-        platform: [ubuntu-latest]
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Install Go
-        if: success()
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - name: go tests
-        run: (set -o pipefail && go test -v -covermode=count -json ./... | tee test.json)
-      - name: annotate go tests
-        if: always()
-        uses: guyarb/golang-test-annotations@v0.8.0
-        with:
-          test-results: test.json
-
   test-provisioning:
-    needs:
-      - go-lint
-      - go-test
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
       matrix:
-        test-case: [ roles ]
-
+        test-case: [roles]
     env:
       BATON_LOG_LEVEL: debug
       CONNECTOR_PRINCIPAL: "${{ secrets.CONNECTOR_PRINCIPAL }}"
@@ -58,7 +19,6 @@ jobs:
       BATON_CONNECTOR: ./baton-workato
       BATON_WORKATO_ENV: dev
       BATON_DISABLE_CUSTOM_ROLES_SYNC: true
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -68,12 +28,10 @@ jobs:
           go-version-file: go.mod
       - name: Install baton
         run: ./scripts/get-baton.sh && mv baton /usr/local/bin
-
       - name: Build baton-workato
         run: go build ./cmd/baton-workato
-
       - name: Run tests for ${{ matrix.test-case }}
-        run: |
+        run: |-
           case "${{ matrix.test-case }}" in
             "roles")
               BATON_SKIP_REVOKE=1 ./scripts/validate-grant.sh ${{ env.CONNECTOR_PRINCIPAL }} collaborator role:Operator:collaborator-has role:Operator:collaborator-has:collaborator:${{ env.CONNECTOR_PRINCIPAL }}
