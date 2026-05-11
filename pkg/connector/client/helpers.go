@@ -36,12 +36,16 @@ func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress
 		err  error
 	)
 
+	reqOpts := []uhttp.RequestOption{uhttp.WithBearerToken(c.apiKey)}
+	if body != nil {
+		reqOpts = append(reqOpts, uhttp.WithJSONBody(body))
+	}
+
 	req, err := c.httpClient.NewRequest(
 		ctx,
 		method,
 		urlAddress,
-		uhttp.WithBearerToken(c.apiKey),
-		uhttp.WithJSONBody(body),
+		reqOpts...,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create HTTP request object: %w", err)
