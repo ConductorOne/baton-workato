@@ -3,10 +3,10 @@ package connector
 import (
 	"context"
 
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
-	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 )
@@ -23,10 +23,7 @@ func (o *projectBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 
 // List returns all the projects.
 func (o *projectBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
-	l := ctxzap.Extract(ctx)
-	l.Debug("Listing projects")
-
-	projects, nextToken, err := o.client.GetProjects(ctx, attr.PageToken.Token)
+	projects, nextToken, rl, err := o.client.GetProjects(ctx, attr.PageToken.Token)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -41,9 +38,9 @@ func (o *projectBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.Syn
 		rv[i] = us
 	}
 
-	return rv, &rs.SyncOpResults{
-		NextPageToken: nextToken,
-	}, nil
+	annos := annotations.Annotations{}
+	annos.WithRateLimiting(rl)
+	return rv, &rs.SyncOpResults{NextPageToken: nextToken, Annotations: annos}, nil
 }
 
 // Entitlements returns an empty slice since projects are not assignable.

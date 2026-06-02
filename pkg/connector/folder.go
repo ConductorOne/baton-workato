@@ -8,11 +8,11 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
-	"github.com/conductorone/baton-workato/pkg/connector/cpagination"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
@@ -37,8 +37,6 @@ func (o *folderBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 // List returns all the folders and project folders.
 func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
 	l := ctxzap.Extract(ctx)
-	l.Debug("Listing folders")
-
 	rv := make([]*v2.Resource, 0)
 
 	if parentResourceID == nil {
@@ -46,24 +44,22 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 	}
 
 	if parentResourceID.ResourceType == projectResourceType.Id {
-		projects, nextToken, err := o.client.GetProjects(ctx, attr.PageToken.Token)
+		projects, nextToken, rl, err := o.client.GetProjects(ctx, attr.PageToken.Token)
 		if err != nil {
 			return nil, nil, err
 		}
 
 		for _, project := range projects {
-			// Create a resource for the project
-			projectRs, err := projectFolderResource(&project, parentResourceID)
+			rootFolder, err := projectFolderResource(&project, parentResourceID)
 			if err != nil {
 				return nil, nil, err
 			}
-
-			rv = append(rv, projectRs)
+			rv = append(rv, rootFolder)
 		}
 
-		return rv, &rs.SyncOpResults{
-			NextPageToken: nextToken,
-		}, nil
+		annos := annotations.Annotations{}
+		annos.WithRateLimiting(rl)
+		return rv, &rs.SyncOpResults{NextPageToken: nextToken, Annotations: annos}, nil
 	}
 
 	if parentResourceID.ResourceType == folderResourceType.Id {
@@ -72,7 +68,7 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 			return nil, nil, err
 		}
 
-		folders, nextToken, err := o.client.GetFolders(ctx, &parentId, attr.PageToken.Token)
+		folders, nextToken, rl, err := o.client.GetFolders(ctx, &parentId, attr.PageToken.Token)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -85,9 +81,9 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 			rv = append(rv, us)
 		}
 
-		return rv, &rs.SyncOpResults{
-			NextPageToken: nextToken,
-		}, nil
+		annos := annotations.Annotations{}
+		annos.WithRateLimiting(rl)
+		return rv, &rs.SyncOpResults{NextPageToken: nextToken, Annotations: annos}, nil
 	}
 
 	l.Warn("Unknown parent resource type", zap.String("parent_resource_type", parentResourceID.ResourceType))
@@ -110,66 +106,30 @@ func (o *folderBuilder) Entitlements(_ context.Context, resource *v2.Resource, _
 
 // Grants returns the roles granted to a folder.
 func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
-	type Bag struct {
-		ResourceTypeID string
-		Page           int
+	if o.disableCustomRolesSync {
+		return nil, nil, nil
 	}
 
-	bag, err := cpagination.GenBagFromToken[Bag](attr.PageToken)
-	if err != nil {
-		return nil, nil, err
-	}
+	var rv []*v2.Grant
 
-	if bag.Current() == nil {
-		bag.Push(Bag{
-			ResourceTypeID: roleResourceType.Id,
-			Page:           0,
-		})
-
-		nextToken, err := bag.Marshal()
+	folderId := resource.Id.Resource
+	for _, role := range getRoleByFolder(ctx, attr.Session, folderId) {
+		roleID, err := rs.NewResourceID(roleResourceType, role.Id)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		return nil, &rs.SyncOpResults{
-			NextPageToken: nextToken,
-		}, nil
-	}
-
-	state := bag.Pop()
-
-	var rv []*v2.Grant
-
-	if state.ResourceTypeID == roleResourceType.Id && !o.disableCustomRolesSync {
-		folderId := resource.Id.Resource
-		roles := getRoleByFolder(ctx, attr.Session, folderId)
-
-		for _, role := range roles {
-			roleID, err := rs.NewResourceID(roleResourceType, role.Id)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			newGrant := grant.NewGrant(resource, collaboratorAccessEntitlement, roleID, grant.WithAnnotation(
-				&v2.GrantExpandable{
-					EntitlementIds: []string{
-						fmt.Sprintf("role:%s:%s", roleID.Resource, collaboratorHasRoleEntitlement),
-					},
-					Shallow: true,
+		rv = append(rv, grant.NewGrant(resource, collaboratorAccessEntitlement, roleID, grant.WithAnnotation(
+			&v2.GrantExpandable{
+				EntitlementIds: []string{
+					fmt.Sprintf("role:%s:%s", roleID.Resource, collaboratorHasRoleEntitlement),
 				},
-			))
-			rv = append(rv, newGrant)
-		}
+				Shallow: true,
+			},
+		)))
 	}
 
-	nextToken, err := bag.Marshal()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return rv, &rs.SyncOpResults{
-		NextPageToken: nextToken,
-	}, nil
+	return rv, nil, nil
 }
 
 func newFolderBuilder(client *client.WorkatoClient, disableCustomRolesSync bool) *folderBuilder {

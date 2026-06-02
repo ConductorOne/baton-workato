@@ -38,10 +38,16 @@ Select the following endpoints:
     |              | Projects & Folders   | List folders                | `GET /api/folders`                 |
     | **Admin**    | Collaborators        | Get collaborators           | `GET /api/members`                 |
     |              | Collaborators        | Get collaborator            | `GET /api/members/:id`             |
-    |              | Collaborators        | Update collaborators' roles* | `PUT /api/members/:id`             |
+    |              | Collaborators        | Update collaborators’ roles* | `PUT /api/members/:id`             |
     |              | Collaborators        | Get collaborator privileges | `GET /api/members/:id/privileges`  |
     |              | Collaborator roles   | List non-system roles       | `GET /api/roles`                   |
-    *If you don't want to use C1 to provision role assignments, you can skip **Update collaborator’s roles**.
+    |              | Environment roles    | List environment roles†     | `GET /api/environment_roles`       |
+    |              | Environment roles    | Get environment role†‡      | `GET /api/environment_roles/:id`   |
+    *If you don’t want to use C1 to provision role assignments, you can skip **Update collaborator’s roles** and **Get environment role**.
+
+    †**List environment roles** and **Get environment role** are only available in workspaces that use the new RBAC v2 model (environment roles). If your workspace uses the legacy role model, these permissions do not appear in the UI and you can skip them.
+
+    ‡**Get environment role** is required only if you want C1 to provision environment role assignments.
 </Step>
 <Step>
 Save the new role.  

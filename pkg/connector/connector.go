@@ -30,6 +30,7 @@ func (d *Connector) ResourceSyncers(ctx context.Context) []connectorbuilder.Reso
 		newCollaboratorBuilder(d.client, d.env, d.disableCustomRolesSync),
 		newPrivilegeBuilder(d.client),
 		newRoleBuilder(d.client, d.env, d.disableCustomRolesSync),
+		newEnvironmentRoleBuilder(d.client, d.env),
 		newFolderBuilder(d.client, d.disableCustomRolesSync),
 		newProjectBuilder(d.client),
 	}

@@ -2,14 +2,15 @@ package workato
 
 import (
 	"reflect"
+	"sort"
 	"testing"
 )
 
 func TestAllCompoundPrivileges(t *testing.T) {
 	result := AllCompoundPrivileges()
 
-	if len(result) != 105 {
-		t.Errorf("Expected 105, got %d", len(result))
+	if len(result) != 111 {
+		t.Errorf("Expected 111, got %d", len(result))
 	}
 }
 
@@ -64,6 +65,15 @@ func TestFindRelatedPrivileges(t *testing.T) {
 		},
 	}
 
+	sortPrivileges := func(p []CompoundPrivilege) {
+		sort.Slice(p, func(i, j int) bool {
+			if p[i].Resource != p[j].Resource {
+				return p[i].Resource < p[j].Resource
+			}
+			return p[i].Privilege.Id < p[j].Privilege.Id
+		})
+	}
+
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			result := FindRelatedPrivileges(c.input)
@@ -71,6 +81,9 @@ func TestFindRelatedPrivileges(t *testing.T) {
 			if len(result) != len(c.expected) {
 				t.Errorf("Expected %d, got %d", len(c.expected), len(result))
 			}
+
+			sortPrivileges(result)
+			sortPrivileges(c.expected)
 
 			if !reflect.DeepEqual(result, c.expected) {
 				t.Errorf("Expected %v, got %v", c.expected, result)

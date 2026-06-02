@@ -1,3 +1,4 @@
+{"level":"info","ts":1780432430.6711166,"caller":"uhttp/gocache.go:148","msg":"http cache config","config":"Backend: memory, TTL: 3600000000000, MaxSize: 5MB, LogDebug: false"}
 {
   "@type": "type.googleapis.com/c1.connector.v2.ConnectorCapabilities",
   "resourceTypeCapabilities": [
@@ -11,6 +12,20 @@
       },
       "capabilities": [
         "CAPABILITY_SYNC"
+      ],
+      "permissions": {}
+    },
+    {
+      "resourceType": {
+        "id": "environment_role",
+        "displayName": "Environment Role",
+        "traits": [
+          "TRAIT_ROLE"
+        ]
+      },
+      "capabilities": [
+        "CAPABILITY_SYNC",
+        "CAPABILITY_PROVISION"
       ],
       "permissions": {}
     },

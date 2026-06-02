@@ -17,19 +17,28 @@ var (
 )
 
 var (
+	// https://docs.workato.com/workato-api/team.html
 	GetCollaboratorsPath       = "api/members"
 	GetCollaboratorByIdPath    = "api/members/%d/privileges"
 	UpdateCollaboratorByIdPath = "/api/members/%d"
-	GetRolesPath               = "api/roles"
-	GetProjectsPath            = "api/projects"
-	GetFoldersPath             = "api/folders"
+
+	// https://docs.workato.com/workato-api/roles.html
+	GetRolesPath = "api/roles"
+
+	// https://docs.workato.com/workato-api/environment-roles.html
+	GetEnvironmentRolesPath = "api/environment_roles"
+
+	// https://docs.workato.com/workato-api/projects.html
+	GetProjectsPath = "api/projects"
+
+	// https://docs.workato.com/workato-api/folders.html
+	GetFoldersPath = "api/folders"
 )
 
 type WorkatoClient struct {
 	apiKey     string
 	baseUrl    *url.URL
 	httpClient *uhttp.BaseHttpClient
-	pageLimit  int
 }
 
 func NewWorkatoClient(ctx context.Context, apiKey, baseUrl string) (*WorkatoClient, error) {
@@ -56,6 +65,5 @@ func NewWorkatoClient(ctx context.Context, apiKey, baseUrl string) (*WorkatoClie
 		httpClient: uhttpClient,
 		baseUrl:    parseBaseUrl,
 		apiKey:     apiKey,
-		pageLimit:  500,
 	}, nil
 }

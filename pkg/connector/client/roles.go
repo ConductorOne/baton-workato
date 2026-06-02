@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+
+	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 )
 
-func (c *WorkatoClient) GetRoles(ctx context.Context, pToken string) ([]Role, string, error) {
+func (c *WorkatoClient) GetRoles(ctx context.Context, pToken string) ([]Role, string, *v2.RateLimitDescription, error) {
 	var response []Role
 	var err error
 
@@ -16,21 +18,20 @@ func (c *WorkatoClient) GetRoles(ctx context.Context, pToken string) ([]Role, st
 	if pToken != "" {
 		page, err = strconv.Atoi(pToken)
 		if err != nil {
-			return nil, "", errors.Join(ErrInvalidPaginationToken, err)
+			return nil, "", nil, errors.Join(ErrInvalidPaginationToken, err)
 		}
 	}
 
 	uri := c.getPath(GetRolesPath)
 
 	query := uri.Query()
-	query.Add("per_page", fmt.Sprintf("%d", c.pageLimit))
 	query.Add("page", fmt.Sprintf("%d", page))
 	uri.RawQuery = query.Encode()
 
-	err = c.doRequest(ctx, http.MethodGet, uri, &response, nil)
+	rl, err := c.doRequest(ctx, http.MethodGet, uri, &response, nil)
 	if err != nil {
-		return nil, "", err
+		return nil, "", rl, err
 	}
 
-	return response, nextToken(c, response, page), nil
+	return response, nextToken(response, page), rl, nil
 }

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 
+	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"google.golang.org/grpc/codes"
 )
@@ -30,8 +31,9 @@ func (c *WorkatoClient) getPath(path string) *url.URL {
 	return c.baseUrl.JoinPath(path)
 }
 
-func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress *url.URL, res any, body any) error {
+func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress *url.URL, res any, body any) (*v2.RateLimitDescription, error) {
 	var resp *http.Response
+	var rateLimitData v2.RateLimitDescription
 
 	reqOpts := []uhttp.RequestOption{uhttp.WithBearerToken(c.apiKey)}
 	if body != nil {
@@ -40,33 +42,33 @@ func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress
 
 	req, err := c.httpClient.NewRequest(ctx, method, urlAddress, reqOpts...)
 	if err != nil {
-		return fmt.Errorf("baton-workato: failed to create HTTP request: %w", err)
+		return nil, fmt.Errorf("baton-workato: failed to create HTTP request: %w", err)
 	}
 
-	doOpts := []uhttp.DoOption{uhttp.WithErrorResponse(&ApiError{})}
+	doOpts := []uhttp.DoOption{
+		uhttp.WithErrorResponse(&ApiError{}),
+		uhttp.WithRatelimitData(&rateLimitData),
+	}
 	if res != nil {
 		doOpts = append(doOpts, uhttp.WithResponse(&res))
 	}
 
 	resp, err = c.httpClient.Do(req, doOpts...)
 	if err != nil {
-		return err
+		return &rateLimitData, err
 	}
 	if resp == nil {
-		return uhttp.WrapErrors(codes.Internal, "baton-workato doRequest: response is nil with no error, this should never happen")
+		return &rateLimitData, uhttp.WrapErrors(codes.Internal, "baton-workato doRequest: response is nil with no error, this should never happen")
 	}
 
 	defer resp.Body.Close()
 
-	return nil
+	return &rateLimitData, nil
 }
 
-func nextToken[T any](c *WorkatoClient, response []T, page int) string {
-	token := ""
-
-	if len(response) == c.pageLimit {
-		token = fmt.Sprintf("%d", page+1)
+func nextToken[T any](response []T, page int) string {
+	if len(response) == 0 {
+		return ""
 	}
-
-	return token
+	return fmt.Sprintf("%d", page+1)
 }

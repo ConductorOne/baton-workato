@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+
+	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 )
 
-func (c *WorkatoClient) GetFolders(ctx context.Context, parentId *int, pToken string) ([]Folder, string, error) {
+func (c *WorkatoClient) GetFolders(ctx context.Context, parentId *int, pToken string) ([]Folder, string, *v2.RateLimitDescription, error) {
 	var response []Folder
 	var err error
 
@@ -16,14 +18,13 @@ func (c *WorkatoClient) GetFolders(ctx context.Context, parentId *int, pToken st
 	if pToken != "" {
 		page, err = strconv.Atoi(pToken)
 		if err != nil {
-			return nil, "", errors.Join(ErrInvalidPaginationToken, err)
+			return nil, "", nil, errors.Join(ErrInvalidPaginationToken, err)
 		}
 	}
 
 	uri := c.getPath(GetFoldersPath)
 
 	query := uri.Query()
-	query.Add("per_page", fmt.Sprintf("%d", c.pageLimit))
 	query.Add("page", fmt.Sprintf("%d", page))
 
 	if parentId != nil {
@@ -32,10 +33,10 @@ func (c *WorkatoClient) GetFolders(ctx context.Context, parentId *int, pToken st
 
 	uri.RawQuery = query.Encode()
 
-	err = c.doRequest(ctx, http.MethodGet, uri, &response, nil)
+	rl, err := c.doRequest(ctx, http.MethodGet, uri, &response, nil)
 	if err != nil {
-		return nil, "", err
+		return nil, "", rl, err
 	}
 
-	return response, nextToken(c, response, page), nil
+	return response, nextToken(response, page), rl, nil
 }
