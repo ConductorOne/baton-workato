@@ -41,6 +41,7 @@ jobs:
     env:
       BATON_LOG_LEVEL: debug
       BATON_WORKATO_API_KEY: ${{ secrets.BATON_WORKATO_API_KEY }}
+      BATON_WORKATO_DATA_CENTER: sandbox
       BATON_WORKATO_ENV: dev
     steps:
       - name: Checkout code
