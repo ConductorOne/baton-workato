@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
@@ -53,7 +54,11 @@ func (d *Connector) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error)
 // Validate is called to ensure that the connector is properly configured. It should exercise any API credentials
 // to be sure that they are valid.
 func (d *Connector) Validate(ctx context.Context) (annotations.Annotations, error) {
-	return nil, nil
+	_, annos, err := d.client.GetCollaborators(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("baton-workato: failed to validate credentials: %w", err)
+	}
+	return annos, nil
 }
 
 // New returns a new instance of the connector.

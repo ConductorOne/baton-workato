@@ -14,8 +14,6 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
-	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -40,9 +38,6 @@ func (o *roleBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 
 // List returns all the Workato base roles and custom roles.
 func (o *roleBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
-	var nextToken string
-	var rl *v2.RateLimitDescription
-
 	rv := make([]*v2.Resource, 0)
 	var envs []workato.Environment
 	if o.env == workato.All {
@@ -52,44 +47,53 @@ func (o *roleBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOp
 	}
 
 	if !o.disableCustomRolesSync {
-		var roles []client.Role
-		var err error
-		roles, nextToken, rl, err = o.client.GetRoles(ctx, attr.PageToken.Token)
+		roles, nextToken, annos, err := o.client.GetRoles(ctx, attr.PageToken.Token)
 		if err != nil {
-			return nil, nil, err
+			return nil, &rs.SyncOpResults{Annotations: annos}, err
 		}
 
-		err = setRolesCache(ctx, attr.Session, roles)
-		if err != nil {
-			return nil, nil, err
+		if err = setRolesCache(ctx, attr.Session, roles); err != nil {
+			return nil, &rs.SyncOpResults{Annotations: annos}, err
 		}
 
 		for _, targetEnv := range envs {
 			for _, role := range roles {
-				us, err := roleResource(&role, o.env, targetEnv)
+				us, err := roleResource(role, o.env, targetEnv)
 				if err != nil {
-					return nil, nil, err
+					return nil, &rs.SyncOpResults{Annotations: annos}, err
 				}
 				rv = append(rv, us)
 			}
 		}
-	}
 
-	if nextToken == "" {
+		if nextToken != "" {
+			return rv, &rs.SyncOpResults{NextPageToken: nextToken, Annotations: annos}, nil
+		}
+
+		// Last page of custom roles: append base roles and return with rate limit propagated
 		for _, targetEnv := range envs {
 			for _, role := range workato.BaseRoles {
 				us, err := workatoBaseRoleResource(&role, o.env, targetEnv)
 				if err != nil {
-					return nil, nil, err
+					return nil, &rs.SyncOpResults{Annotations: annos}, err
 				}
 				rv = append(rv, us)
 			}
 		}
+		return rv, &rs.SyncOpResults{Annotations: annos}, nil
 	}
 
-	annos := annotations.Annotations{}
-	annos.WithRateLimiting(rl)
-	return rv, &rs.SyncOpResults{NextPageToken: nextToken, Annotations: annos}, nil
+	// Custom roles sync disabled: only base roles, no API call
+	for _, targetEnv := range envs {
+		for _, role := range workato.BaseRoles {
+			us, err := workatoBaseRoleResource(&role, o.env, targetEnv)
+			if err != nil {
+				return nil, nil, err
+			}
+			rv = append(rv, us)
+		}
+	}
+	return rv, nil, nil
 }
 
 // Entitlements returns an entitlement for the role to be assigned to a collaborator.
@@ -107,7 +111,6 @@ func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ r
 
 // Grants returns the privileges granted to a role.
 func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
-	l := ctxzap.Extract(ctx)
 	rv := make([]*v2.Grant, 0)
 
 	roleTrait, err := rs.GetRoleTrait(resource)
@@ -166,7 +169,6 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs
 		// privilege grants implementation
 		role := getRoleById(ctx, attr.Session, roleId)
 		if role == nil {
-			l.Warn("role not found", zap.String("role_name", resource.DisplayName), zap.String("role_id", roleId))
 			return rv, nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("role %s (%s) not found", resource.DisplayName, roleId))
 		}
 
@@ -238,9 +240,9 @@ func (o *roleBuilder) Grant(ctx context.Context, principal *v2.Resource, entitle
 		EnvironmentType: envType.String(),
 	}}
 
-	rl, err := o.client.UpdateCollaboratorRoles(ctx, userID, roles)
+	annos, err := o.client.UpdateCollaboratorRoles(ctx, userID, roles)
 	if err != nil {
-		return nil, nil, err
+		return nil, annos, err
 	}
 
 	newGrant := grant.NewGrant(
@@ -251,9 +253,6 @@ func (o *roleBuilder) Grant(ctx context.Context, principal *v2.Resource, entitle
 			"environment_type": envType.String(),
 		}),
 	)
-
-	annos := annotations.Annotations{}
-	annos.WithRateLimiting(rl)
 	return []*v2.Grant{newGrant}, annos, nil
 }
 

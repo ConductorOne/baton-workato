@@ -2,11 +2,14 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"google.golang.org/grpc/codes"
 )
@@ -31,7 +34,7 @@ func (c *WorkatoClient) getPath(path string) *url.URL {
 	return c.baseUrl.JoinPath(path)
 }
 
-func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress *url.URL, res any, body any) (*v2.RateLimitDescription, error) {
+func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress *url.URL, res any, body any) (annotations.Annotations, error) {
 	var resp *http.Response
 	var rateLimitData v2.RateLimitDescription
 
@@ -54,16 +57,18 @@ func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress
 	}
 
 	resp, err = c.httpClient.Do(req, doOpts...)
+	var annos annotations.Annotations
+	annos.WithRateLimiting(&rateLimitData)
 	if err != nil {
-		return &rateLimitData, err
+		return annos, err
 	}
 	if resp == nil {
-		return &rateLimitData, uhttp.WrapErrors(codes.Internal, "baton-workato doRequest: response is nil with no error, this should never happen")
+		return annos, uhttp.WrapErrors(codes.Internal, "baton-workato doRequest: response is nil with no error, this should never happen")
 	}
 
 	defer resp.Body.Close()
 
-	return &rateLimitData, nil
+	return annos, nil
 }
 
 func nextToken[T any](response []T, page int) string {
@@ -71,4 +76,15 @@ func nextToken[T any](response []T, page int) string {
 		return ""
 	}
 	return fmt.Sprintf("%d", page+1)
+}
+
+func parsePageToken(pToken string, defaultPage int) (int, error) {
+	if pToken == "" {
+		return defaultPage, nil
+	}
+	page, err := strconv.Atoi(pToken)
+	if err != nil {
+		return 0, errors.Join(ErrInvalidPaginationToken, err)
+	}
+	return page, nil
 }

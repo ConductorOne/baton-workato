@@ -2,54 +2,70 @@ package client
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 
-	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 )
 
-func (c *WorkatoClient) GetEnvironmentRole(ctx context.Context, id string) (*EnvironmentRole, *v2.RateLimitDescription, error) {
+// GetEnvironmentRoleByName fetches an environment role by name using the ?name= filter.
+// GET /api/environment_roles?name=... — https://docs.workato.com/workato-api/environment-roles.html
+// Required permission: Manage team members (API key scope).
+func (c *WorkatoClient) GetEnvironmentRoleByName(ctx context.Context, name string) (*EnvironmentRole, annotations.Annotations, error) {
+	var response CommonPagination[*EnvironmentRole]
+	uri := c.getPath(environmentRolesPath)
+	query := uri.Query()
+	query.Add("name", name)
+	uri.RawQuery = query.Encode()
+	annos, err := c.doRequest(ctx, http.MethodGet, uri, &response, nil)
+	if err != nil {
+		return nil, annos, err
+	}
+	for _, role := range response.Data {
+		if role != nil && role.Name == name {
+			return role, annos, nil
+		}
+	}
+	return nil, annos, nil
+}
+
+// GetEnvironmentRole fetches a single environment role by ID.
+// GET /api/environment_roles/:id — https://docs.workato.com/workato-api/environment-roles.html
+// Required permission: Manage team members (API key scope).
+func (c *WorkatoClient) GetEnvironmentRole(ctx context.Context, id string) (*EnvironmentRole, annotations.Annotations, error) {
 	var response struct {
 		Data EnvironmentRole `json:"data"`
 	}
-	uri := c.getPath(fmt.Sprintf("%s/%s", GetEnvironmentRolesPath, id))
-	rl, err := c.doRequest(ctx, http.MethodGet, uri, &response, nil)
+	uri := c.getPath(environmentRolesPath).JoinPath(id)
+	annos, err := c.doRequest(ctx, http.MethodGet, uri, &response, nil)
 	if err != nil {
-		return nil, rl, err
+		return nil, annos, err
 	}
-	return &response.Data, rl, nil
+	return &response.Data, annos, nil
 }
 
-func (c *WorkatoClient) GetEnvironmentRoles(ctx context.Context, pToken string) ([]EnvironmentRole, string, *v2.RateLimitDescription, error) {
-	var response CommonPagination[EnvironmentRole]
-	var err error
+// GetEnvironmentRoles returns a paginated list of environment roles.
+// GET /api/environment_roles — https://docs.workato.com/workato-api/environment-roles.html
+// Uses 1-based page[number] + page[size] pagination parameters.
+// Required permission: Manage team members (API key scope).
+func (c *WorkatoClient) GetEnvironmentRoles(ctx context.Context, pToken string) ([]*EnvironmentRole, string, annotations.Annotations, error) {
+	var response CommonPagination[*EnvironmentRole]
 
-	// GET /api/environment_roles uses 1-based page[number] + page[size] params.
-	page := 1
-	if pToken != "" {
-		page, err = strconv.Atoi(pToken)
-		if err != nil {
-			return nil, "", nil, errors.Join(ErrInvalidPaginationToken, err)
-		}
+	page, err := parsePageToken(pToken, 1)
+	if err != nil {
+		return nil, "", nil, err
 	}
 
-	uri := c.getPath(GetEnvironmentRolesPath)
-
+	uri := c.getPath(environmentRolesPath)
 	query := uri.Query()
-	query.Add("page[number]", fmt.Sprintf("%d", page))
+	query.Add("page[number]", strconv.Itoa(page))
 	query.Add("page[size]", "100")
 	uri.RawQuery = query.Encode()
 
-	rl, err := c.doRequest(ctx, http.MethodGet, uri, &response, nil)
+	annos, err := c.doRequest(ctx, http.MethodGet, uri, &response, nil)
 	if err != nil {
-		return nil, "", rl, err
+		return nil, "", annos, err
 	}
 
-	var next string
-	if len(response.Data) > 0 {
-		next = strconv.Itoa(page + 1)
-	}
-	return response.Data, next, rl, nil
+	return response.Data, nextToken(response.Data, page), annos, nil
 }

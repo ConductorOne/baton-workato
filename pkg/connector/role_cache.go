@@ -62,7 +62,7 @@ func getRoleByName(ctx context.Context, sessionStorage sessions.SessionStore, ro
 	return role, nil
 }
 
-func setRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, roles []client.Role) error {
+func setRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, roles []*client.Role) error {
 	if len(roles) > 0 {
 		err := session.SetManyJSON(ctx, sessionStorage, parseJSONRolesCache(roles), sessions.WithPrefix(rolesCachePrefix))
 		if err != nil {
@@ -74,20 +74,15 @@ func setRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, ro
 	var mapRolesByName = make(map[string]*client.Role)
 
 	for _, role := range roles {
-		copyRole := role
-
 		for _, folderID := range role.FolderIDs {
 			folderIDStr := strconv.Itoa(folderID)
-
-			if roles, ok := mapRoles[folderIDStr]; ok {
-				roles = append(roles, &copyRole)
-				mapRoles[folderIDStr] = roles
-			} else {
-				mapRoles[folderIDStr] = []*client.Role{&copyRole}
+			if _, ok := mapRoles[folderIDStr]; !ok {
+				mapRoles[folderIDStr] = getRoleByFolder(ctx, sessionStorage, folderIDStr)
 			}
+			mapRoles[folderIDStr] = append(mapRoles[folderIDStr], role)
 		}
 
-		mapRolesByName[copyRole.Name] = &copyRole
+		mapRolesByName[role.Name] = role
 	}
 
 	if (len(mapRoles)) > 0 {
@@ -107,11 +102,10 @@ func setRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, ro
 	return nil
 }
 
-func setEnvironmentRolesByNameCache(ctx context.Context, sessionStorage sessions.SessionStore, roles []client.EnvironmentRole) error {
+func setEnvironmentRolesByNameCache(ctx context.Context, sessionStorage sessions.SessionStore, roles []*client.EnvironmentRole) error {
 	byName := make(map[string]*client.EnvironmentRole, len(roles))
 	for _, role := range roles {
-		r := role
-		byName[r.Name] = &r
+		byName[role.Name] = role
 	}
 	if len(byName) == 0 {
 		return nil
@@ -133,13 +127,10 @@ func getEnvironmentRoleByName(ctx context.Context, sessionStorage sessions.Sessi
 	return role, nil
 }
 
-func parseJSONRolesCache(roles []client.Role) map[string]*client.Role {
+func parseJSONRolesCache(roles []*client.Role) map[string]*client.Role {
 	rolesMap := make(map[string]*client.Role)
 	for _, role := range roles {
-		roleCopy := role
-
-		roleIDStr := strconv.Itoa(roleCopy.Id)
-		rolesMap[roleIDStr] = &roleCopy
+		rolesMap[strconv.Itoa(role.Id)] = role
 	}
 	return rolesMap
 }

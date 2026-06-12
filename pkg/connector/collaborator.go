@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
@@ -41,29 +40,26 @@ func (o *collaboratorBuilder) ResourceType(ctx context.Context) *v2.ResourceType
 // List returns all the users from the database as resource objects.
 // Users include a UserTrait because they are the 'shape' of a standard user.
 func (o *collaboratorBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
-	collaborators, rl, err := o.client.GetCollaborators(ctx)
+	collaborators, annos, err := o.client.GetCollaborators(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, &rs.SyncOpResults{Annotations: annos}, err
 	}
 
 	// Set collaborators cache
-	err = o.cache.setCollaboratorsCache(ctx, attr.Session, collaborators)
-	if err != nil {
-		return nil, nil, err
+	if err = o.cache.setCollaboratorsCache(ctx, attr.Session, collaborators); err != nil {
+		return nil, &rs.SyncOpResults{Annotations: annos}, err
 	}
 
 	rv := make([]*v2.Resource, len(collaborators))
 
 	for i, collaborator := range collaborators {
-		us, err := collaboratorResource(&collaborator)
+		us, err := collaboratorResource(collaborator)
 		if err != nil {
-			return nil, nil, err
+			return nil, &rs.SyncOpResults{Annotations: annos}, err
 		}
 		rv[i] = us
 	}
 
-	annos := annotations.Annotations{}
-	annos.WithRateLimiting(rl)
 	return rv, &rs.SyncOpResults{Annotations: annos}, nil
 }
 
@@ -90,14 +86,12 @@ func (o *collaboratorBuilder) Grants(ctx context.Context, res *v2.Resource, attr
 
 	rv = append(rv, collaboratorRoleGrants...)
 
-	collaboratorRoles, rl, err := o.client.GetCollaboratorPrivileges(ctx, collaboratorId)
+	collaboratorRoles, annos, err := o.client.GetCollaboratorPrivileges(ctx, collaboratorId)
 	if err != nil {
 		if status.Code(err) != codes.NotFound {
-			return nil, nil, fmt.Errorf("failed to get collaborator privileges: %w", err)
+			return nil, &rs.SyncOpResults{Annotations: annos}, fmt.Errorf("failed to get collaborator privileges: %w", err)
 		}
 		l.Debug("Collaborator privileges not found, skipping", zap.Int("collaborator_id", collaboratorId))
-		annos := annotations.Annotations{}
-		annos.WithRateLimiting(rl)
 		return rv, &rs.SyncOpResults{Annotations: annos}, nil
 	}
 
@@ -126,8 +120,6 @@ func (o *collaboratorBuilder) Grants(ctx context.Context, res *v2.Resource, attr
 		}
 	}
 
-	annos := annotations.Annotations{}
-	annos.WithRateLimiting(rl)
 	return rv, &rs.SyncOpResults{Annotations: annos}, nil
 }
 
@@ -189,35 +181,30 @@ func (o *collaboratorBuilder) collaboratorRoleGrants(ctx context.Context, sessio
 			continue
 		}
 
+		if role.RoleName == noAccessRoleName {
+			continue
+		}
+
 		var roleResource *v2.Resource
 
-		switch {
-		case workato.IsBaseRole(role.RoleName):
-			baseRole, err := workato.GetBaseRole(role.RoleName)
-			if err != nil {
-				l.Error("failed to get base role %s", zap.String("role_name", role.RoleName), zap.Error(err))
-				return nil, fmt.Errorf("failed to get base role: %w", err)
-			}
-			targetEnv, err := workato.EnvFromString(role.EnvironmentType)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get target environment from role environment type: %w", err)
-			}
-			roleId := GetRoleResourceID(baseRole.RoleName, targetEnv, o.env)
-			roleResource = &v2.Resource{
-				Id: &v2.ResourceId{
-					ResourceType: roleResourceType.Id,
-					Resource:     roleId,
-				},
-			}
-		case role.RoleName == noAccessRoleName:
-			continue
-		case role.RoleType == "environment":
+		switch role.RoleType {
+		case "environment":
 			envRole, err := getEnvironmentRoleByName(ctx, session, role.RoleName)
 			if err != nil {
 				return nil, err
 			}
 			if envRole == nil {
-				return nil, fmt.Errorf("baton-workato: environment role %s not found", role.RoleName)
+				// The list endpoint returns 200 with an empty list when the name does not match.
+				envRole, _, err = o.client.GetEnvironmentRoleByName(ctx, role.RoleName)
+				if err != nil {
+					return nil, fmt.Errorf("baton-workato: failed to get environment role %s: %w", role.RoleName, err)
+				}
+				if envRole == nil {
+					l.Debug("baton-workato: environment role not found, it may have been deleted",
+						zap.String("role_name", role.RoleName),
+					)
+					continue
+				}
 			}
 			targetEnv, err := workato.EnvFromString(role.EnvironmentType)
 			if err != nil {
@@ -229,28 +216,50 @@ func (o *collaboratorBuilder) collaboratorRoleGrants(ctx context.Context, sessio
 					Resource:     GetRoleResourceID(strconv.Itoa(envRole.Id), targetEnv, o.env),
 				},
 			}
-		case !o.disableCustomRolesSync:
-			customRole, err := getRoleByName(ctx, session, role.RoleName)
-			if err != nil {
-				return nil, err
+
+		case "privilege_group", "":
+			switch {
+			case workato.IsBaseRole(role.RoleName):
+				baseRole, err := workato.GetBaseRole(role.RoleName)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get base role: %w", err)
+				}
+				targetEnv, err := workato.EnvFromString(role.EnvironmentType)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get target environment from role environment type: %w", err)
+				}
+				roleResource = &v2.Resource{
+					Id: &v2.ResourceId{
+						ResourceType: roleResourceType.Id,
+						Resource:     GetRoleResourceID(baseRole.RoleName, targetEnv, o.env),
+					},
+				}
+			case !o.disableCustomRolesSync:
+				customRole, err := getRoleByName(ctx, session, role.RoleName)
+				if err != nil {
+					return nil, err
+				}
+				if customRole == nil {
+					l.Debug("baton-workato: custom role not found, it may have been deleted", zap.String("role_name", role.RoleName))
+					continue
+				}
+				targetEnv, err := workato.EnvFromString(role.EnvironmentType)
+				if err != nil {
+					return nil, fmt.Errorf("baton-workato: failed to get target environment from role environment type: %w", err)
+				}
+				roleResource = &v2.Resource{
+					Id: &v2.ResourceId{
+						ResourceType: roleResourceType.Id,
+						Resource:     GetRoleResourceID(strconv.Itoa(customRole.Id), targetEnv, o.env),
+					},
+				}
+			default:
+				l.Debug("baton-workato: skipping custom role, custom roles sync is disabled", zap.String("role_name", role.RoleName))
+				continue
 			}
-			if customRole == nil {
-				return nil, fmt.Errorf("baton-workato: custom role %s not found", role.RoleName)
-			}
-			customRoleId := strconv.Itoa(customRole.Id)
-			targetEnv, err := workato.EnvFromString(role.EnvironmentType)
-			if err != nil {
-				return nil, fmt.Errorf("baton-workato: failed to get target environment from role environment type: %w", err)
-			}
-			roleId := GetRoleResourceID(customRoleId, targetEnv, o.env)
-			roleResource = &v2.Resource{
-				Id: &v2.ResourceId{
-					ResourceType: roleResourceType.Id,
-					Resource:     roleId,
-				},
-			}
+
 		default:
-			l.Debug("baton-workato: skipping role because it is not a base role and custom roles sync is disabled", zap.String("role_name", role.RoleName))
+			l.Warn("baton-workato: unknown role type, skipping", zap.String("role_type", role.RoleType), zap.String("role_name", role.RoleName))
 			continue
 		}
 

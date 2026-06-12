@@ -16,23 +16,21 @@ var (
 	ErrInvalidPaginationToken = errors.New("baton-workato: invalid pagination token")
 )
 
-var (
+const (
 	// https://docs.workato.com/workato-api/team.html
-	GetCollaboratorsPath       = "api/members"
-	GetCollaboratorByIdPath    = "api/members/%d/privileges"
-	UpdateCollaboratorByIdPath = "/api/members/%d"
+	collaboratorsPath = "api/members"
 
 	// https://docs.workato.com/workato-api/roles.html
-	GetRolesPath = "api/roles"
+	rolesPath = "api/roles"
 
 	// https://docs.workato.com/workato-api/environment-roles.html
-	GetEnvironmentRolesPath = "api/environment_roles"
+	environmentRolesPath = "api/environment_roles"
 
 	// https://docs.workato.com/workato-api/projects.html
-	GetProjectsPath = "api/projects"
+	projectsPath = "api/projects"
 
 	// https://docs.workato.com/workato-api/folders.html
-	GetFoldersPath = "api/folders"
+	foldersPath = "api/folders"
 )
 
 type WorkatoClient struct {

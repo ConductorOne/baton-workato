@@ -2,36 +2,33 @@ package client
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 
-	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 )
 
-func (c *WorkatoClient) GetProjects(ctx context.Context, pToken string) ([]Project, string, *v2.RateLimitDescription, error) {
-	var response []Project
-	var err error
+// GetProjects returns a paginated list of projects.
+// GET /api/projects — https://docs.workato.com/workato-api/projects.html
+// Uses 0-based page pagination parameter.
+// Required permission: Manage team members (API key scope).
+func (c *WorkatoClient) GetProjects(ctx context.Context, pToken string) ([]*Project, string, annotations.Annotations, error) {
+	var response []*Project
 
-	page := 0
-	if pToken != "" {
-		page, err = strconv.Atoi(pToken)
-		if err != nil {
-			return nil, "", nil, errors.Join(ErrInvalidPaginationToken, err)
-		}
+	page, err := parsePageToken(pToken, 0)
+	if err != nil {
+		return nil, "", nil, err
 	}
 
-	uri := c.getPath(GetProjectsPath)
-
+	uri := c.getPath(projectsPath)
 	query := uri.Query()
 	query.Add("page", fmt.Sprintf("%d", page))
 	uri.RawQuery = query.Encode()
 
-	rl, err := c.doRequest(ctx, http.MethodGet, uri, &response, nil)
+	annos, err := c.doRequest(ctx, http.MethodGet, uri, &response, nil)
 	if err != nil {
-		return nil, "", rl, err
+		return nil, "", annos, err
 	}
 
-	return response, nextToken(response, page), rl, nil
+	return response, nextToken(response, page), annos, nil
 }

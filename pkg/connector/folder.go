@@ -8,7 +8,6 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 
-	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
@@ -43,51 +42,48 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 		return nil, nil, nil
 	}
 
-	if parentResourceID.ResourceType == projectResourceType.Id {
-		projects, nextToken, rl, err := o.client.GetProjects(ctx, attr.PageToken.Token)
+	switch parentResourceID.ResourceType {
+	case projectResourceType.Id:
+		projects, nextToken, annos, err := o.client.GetProjects(ctx, attr.PageToken.Token)
 		if err != nil {
-			return nil, nil, err
+			return nil, &rs.SyncOpResults{Annotations: annos}, err
 		}
 
 		for _, project := range projects {
-			rootFolder, err := projectFolderResource(&project, parentResourceID)
+			rootFolder, err := projectFolderResource(project, parentResourceID)
 			if err != nil {
-				return nil, nil, err
+				return nil, &rs.SyncOpResults{Annotations: annos}, err
 			}
 			rv = append(rv, rootFolder)
 		}
 
-		annos := annotations.Annotations{}
-		annos.WithRateLimiting(rl)
 		return rv, &rs.SyncOpResults{NextPageToken: nextToken, Annotations: annos}, nil
-	}
 
-	if parentResourceID.ResourceType == folderResourceType.Id {
+	case folderResourceType.Id:
 		parentId, err := strconv.Atoi(parentResourceID.Resource)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		folders, nextToken, rl, err := o.client.GetFolders(ctx, &parentId, attr.PageToken.Token)
+		folders, nextToken, annos, err := o.client.GetFolders(ctx, &parentId, attr.PageToken.Token)
 		if err != nil {
-			return nil, nil, err
+			return nil, &rs.SyncOpResults{Annotations: annos}, err
 		}
 
 		for _, folder := range folders {
-			us, err := folderResource(&folder, parentResourceID)
+			us, err := folderResource(folder, parentResourceID)
 			if err != nil {
-				return nil, nil, err
+				return nil, &rs.SyncOpResults{Annotations: annos}, err
 			}
 			rv = append(rv, us)
 		}
 
-		annos := annotations.Annotations{}
-		annos.WithRateLimiting(rl)
 		return rv, &rs.SyncOpResults{NextPageToken: nextToken, Annotations: annos}, nil
-	}
 
-	l.Warn("Unknown parent resource type", zap.String("parent_resource_type", parentResourceID.ResourceType))
-	return nil, nil, nil
+	default:
+		l.Debug("baton-workato: unexpected parent resource type in folder List", zap.String("parent_resource_type", parentResourceID.ResourceType))
+		return nil, nil, nil
+	}
 }
 
 // Entitlements returns an entitlement for the folder to be assigned to a collaborator.

@@ -2,45 +2,55 @@ package client
 
 import (
 	"context"
-	"fmt"
 	"net/http"
+	"strconv"
 
-	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
-func (c *WorkatoClient) GetCollaborators(ctx context.Context) ([]Collaborator, *v2.RateLimitDescription, error) {
-	var response CommonPagination[Collaborator]
+// GetCollaborators returns all team collaborators.
+// GET /api/members — https://docs.workato.com/workato-api/team.html
+// The Workato API returns all members in a single response; pagination is not supported.
+// Required permission: Manage team members (API key scope).
+func (c *WorkatoClient) GetCollaborators(ctx context.Context) ([]*Collaborator, annotations.Annotations, error) {
+	var response CommonPagination[*Collaborator]
 
-	rl, err := c.doRequest(ctx, http.MethodGet, c.getPath(GetCollaboratorsPath), &response, nil)
+	annos, err := c.doRequest(ctx, http.MethodGet, c.getPath(collaboratorsPath), &response, nil)
 	if err != nil {
-		return nil, rl, err
+		return nil, annos, err
 	}
 
-	return response.Data, rl, nil
+	return response.Data, annos, nil
 }
 
-func (c *WorkatoClient) GetCollaboratorPrivileges(ctx context.Context, id int) ([]*CollaboratorPrivilege, *v2.RateLimitDescription, error) {
+// GetCollaboratorPrivileges returns the role privileges assigned to a collaborator.
+// GET /api/members/:id/privileges — https://docs.workato.com/workato-api/team.html
+// The Workato API returns all privileges in a single response; pagination is not supported.
+// Required permission: Manage team members (API key scope).
+func (c *WorkatoClient) GetCollaboratorPrivileges(ctx context.Context, id int) ([]*CollaboratorPrivilege, annotations.Annotations, error) {
 	var response CommonPagination[*CollaboratorPrivilege]
-	pathString := fmt.Sprintf(GetCollaboratorByIdPath, id)
 
-	rl, err := c.doRequest(ctx, http.MethodGet, c.getPath(pathString), &response, nil)
+	uri := c.getPath(collaboratorsPath).JoinPath(strconv.Itoa(id), "privileges")
+	annos, err := c.doRequest(ctx, http.MethodGet, uri, &response, nil)
 	if err != nil {
-		return nil, rl, err
+		return nil, annos, err
 	}
 
 	if len(response.Data) == 0 {
-		return nil, rl, status.Errorf(codes.NotFound, "baton-workato: no collaborator privileges found")
+		return nil, annos, uhttp.WrapErrors(codes.NotFound, "baton-workato: no collaborator privileges found")
 	}
 
-	return response.Data, rl, nil
+	return response.Data, annos, nil
 }
 
-func (c *WorkatoClient) UpdateCollaboratorRoles(ctx context.Context, id int, roles []SimpleRole) (*v2.RateLimitDescription, error) {
-	pathString := fmt.Sprintf(UpdateCollaboratorByIdPath, id)
-
-	// Needs this because the json payload it's different https://docs.workato.com/workato-api/team.html#update-collaborator-roles
+// UpdateCollaboratorRoles updates the collaborator's roles for the environments
+// included in env_roles. Roles in environments not included are not affected.
+// PUT /api/members/:id — https://docs.workato.com/workato-api/team.html
+// Required permission: Manage team members (API key scope).
+func (c *WorkatoClient) UpdateCollaboratorRoles(ctx context.Context, id int, roles []SimpleRole) (annotations.Annotations, error) {
+	// The JSON payload field names differ from the SimpleRole struct tags; see API docs.
 	type SimpleRoleRequest struct {
 		EnvironmentType string `json:"environment_type"`
 		RoleName        string `json:"name"`
@@ -58,10 +68,5 @@ func (c *WorkatoClient) UpdateCollaboratorRoles(ctx context.Context, id int, rol
 		EnvRoles: rolesRequest,
 	}
 
-	rl, err := c.doRequest(ctx, http.MethodPut, c.getPath(pathString), nil, body)
-	if err != nil {
-		return rl, err
-	}
-
-	return rl, nil
+	return c.doRequest(ctx, http.MethodPut, c.getPath(collaboratorsPath).JoinPath(strconv.Itoa(id)), nil, body)
 }

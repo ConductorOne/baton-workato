@@ -27,6 +27,8 @@ func (e *ApiError) UnmarshalJSON(data []byte) error {
 		e.Errors = p.Errors
 		e.Msg = p.Msg
 	}
+	// Unmarshal error intentionally ignored: rawBody is always captured above as fallback,
+	// so Message() can surface the raw API response when structured parsing fails.
 	return nil
 }
 

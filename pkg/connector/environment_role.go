@@ -19,6 +19,7 @@ import (
 
 var _ connectorbuilder.ResourceSyncerV2 = (*environmentRoleBuilder)(nil)
 var _ connectorbuilder.ResourceProvisionerV2Limited = (*environmentRoleBuilder)(nil)
+var _ connectorbuilder.StaticEntitlementSyncerV2 = (*environmentRoleBuilder)(nil)
 
 type environmentRoleBuilder struct {
 	client *client.WorkatoClient
@@ -30,13 +31,13 @@ func (o *environmentRoleBuilder) ResourceType(_ context.Context) *v2.ResourceTyp
 }
 
 func (o *environmentRoleBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
-	roles, nextToken, rl, err := o.client.GetEnvironmentRoles(ctx, attr.PageToken.Token)
+	roles, nextToken, annos, err := o.client.GetEnvironmentRoles(ctx, attr.PageToken.Token)
 	if err != nil {
-		return nil, nil, fmt.Errorf("baton-workato: failed to list environment roles: %w", err)
+		return nil, &rs.SyncOpResults{Annotations: annos}, fmt.Errorf("baton-workato: failed to list environment roles: %w", err)
 	}
 
 	if err := setEnvironmentRolesByNameCache(ctx, attr.Session, roles); err != nil {
-		return nil, nil, err
+		return nil, &rs.SyncOpResults{Annotations: annos}, err
 	}
 
 	var envs []workato.Environment
@@ -49,27 +50,30 @@ func (o *environmentRoleBuilder) List(ctx context.Context, _ *v2.ResourceId, att
 	rv := make([]*v2.Resource, 0, len(roles)*len(envs))
 	for _, targetEnv := range envs {
 		for _, role := range roles {
-			r, err := environmentRoleResource(&role, o.env, targetEnv)
+			r, err := environmentRoleResource(role, o.env, targetEnv)
 			if err != nil {
-				return nil, nil, err
+				return nil, &rs.SyncOpResults{Annotations: annos}, err
 			}
 			rv = append(rv, r)
 		}
 	}
 
-	annos := annotations.Annotations{}
-	annos.WithRateLimiting(rl)
 	return rv, &rs.SyncOpResults{NextPageToken: nextToken, Annotations: annos}, nil
 }
 
-func (o *environmentRoleBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ rs.SyncOpAttrs) ([]*v2.Entitlement, *rs.SyncOpResults, error) {
-	opts := []entitlement.EntitlementOption{
-		entitlement.WithGrantableTo(collaboratorResourceType),
-		entitlement.WithDescription(fmt.Sprintf("%s has Collaborator", resource.DisplayName)),
-		entitlement.WithDisplayName(fmt.Sprintf("%s has %s", resource.DisplayName, collaboratorResourceType.DisplayName)),
-	}
+func (o *environmentRoleBuilder) Entitlements(_ context.Context, _ *v2.Resource, _ rs.SyncOpAttrs) ([]*v2.Entitlement, *rs.SyncOpResults, error) {
+	return nil, nil, nil
+}
+
+func (o *environmentRoleBuilder) StaticEntitlements(_ context.Context, _ rs.SyncOpAttrs) ([]*v2.Entitlement, *rs.SyncOpResults, error) {
 	return []*v2.Entitlement{
-		entitlement.NewAssignmentEntitlement(resource, collaboratorHasRoleEntitlement, opts...),
+		entitlement.NewAssignmentEntitlement(
+			nil,
+			collaboratorHasRoleEntitlement,
+			entitlement.WithGrantableTo(collaboratorResourceType),
+			entitlement.WithDisplayName("Has environment role"),
+			entitlement.WithDescription("Collaborator is assigned this environment role"),
+		),
 	}, nil, nil
 }
 
@@ -92,9 +96,9 @@ func (o *environmentRoleBuilder) Grant(ctx context.Context, principal *v2.Resour
 		return nil, nil, err
 	}
 
-	envRole, _, err := o.client.GetEnvironmentRole(ctx, roleID)
+	envRole, annos, err := o.client.GetEnvironmentRole(ctx, roleID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("baton-workato: failed to fetch environment role %s: %w", roleID, err)
+		return nil, annos, fmt.Errorf("baton-workato: failed to fetch environment role %s: %w", roleID, err)
 	}
 
 	roles := []client.SimpleRole{{
@@ -103,16 +107,14 @@ func (o *environmentRoleBuilder) Grant(ctx context.Context, principal *v2.Resour
 		RoleType:        "environment",
 	}}
 
-	rl, err := o.client.UpdateCollaboratorRoles(ctx, userID, roles)
+	annos, err = o.client.UpdateCollaboratorRoles(ctx, userID, roles)
 	if err != nil {
-		return nil, nil, fmt.Errorf("baton-workato: failed to update collaborator roles: %w", err)
+		return nil, annos, fmt.Errorf("baton-workato: failed to update collaborator roles: %w", err)
 	}
 
 	newGrant := sdkGrant.NewGrant(ent.Resource, collaboratorHasRoleEntitlement, principal.Id,
 		sdkGrant.WithGrantMetadata(map[string]any{"environment_type": envType.String()}),
 	)
-	annos := annotations.Annotations{}
-	annos.WithRateLimiting(rl)
 	return []*v2.Grant{newGrant}, annos, nil
 }
 

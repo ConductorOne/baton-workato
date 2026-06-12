@@ -3,7 +3,6 @@ package connector
 import (
 	"context"
 
-	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
@@ -23,23 +22,21 @@ func (o *projectBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 
 // List returns all the projects.
 func (o *projectBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
-	projects, nextToken, rl, err := o.client.GetProjects(ctx, attr.PageToken.Token)
+	projects, nextToken, annos, err := o.client.GetProjects(ctx, attr.PageToken.Token)
 	if err != nil {
-		return nil, nil, err
+		return nil, &rs.SyncOpResults{Annotations: annos}, err
 	}
 
 	rv := make([]*v2.Resource, len(projects))
 
 	for i, project := range projects {
-		us, err := projectResource(&project)
+		us, err := projectResource(project)
 		if err != nil {
-			return nil, nil, err
+			return nil, &rs.SyncOpResults{Annotations: annos}, err
 		}
 		rv[i] = us
 	}
 
-	annos := annotations.Annotations{}
-	annos.WithRateLimiting(rl)
 	return rv, &rs.SyncOpResults{NextPageToken: nextToken, Annotations: annos}, nil
 }
 
