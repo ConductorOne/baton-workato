@@ -12,9 +12,16 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var (
+	// Collaborator (member) provisioning paths.
+	// https://docs.workato.com/workato-api/team.html
+	InviteCollaboratorPath     = "api/member_invitations"
+	AddCollaboratorPath        = "api/members"
+	DeleteCollaboratorByIdPath = "api/members/%d"
+
 	AuthHeaderName = "Authorization"
 
 	// WorkatoDataCenters
@@ -69,6 +76,19 @@ func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress
 	defer resp.Body.Close()
 
 	return annos, nil
+}
+
+// IsNotFoundError reports whether err maps to a gRPC NotFound status. uhttp maps
+// HTTP 404 responses to codes.NotFound. Used for idempotent Delete handling.
+func IsNotFoundError(err error) bool {
+	return status.Code(err) == codes.NotFound
+}
+
+// IsAlreadyExistsError reports whether err maps to a gRPC AlreadyExists status.
+// uhttp maps HTTP 409 responses to codes.AlreadyExists. Used for idempotent
+// CreateAccount handling.
+func IsAlreadyExistsError(err error) bool {
+	return status.Code(err) == codes.AlreadyExists
 }
 
 func nextToken[T any](response []T, page int) string {

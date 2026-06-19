@@ -21,6 +21,15 @@ var (
 		field.WithDefaultValue("us"),
 	)
 
+	// BaseUrlField overrides the data-center-derived base URL. It is empty in
+	// production (the data center selection is used) and only set for integration
+	// tests that point the connector at the local cmd/test-server mock.
+	BaseUrlField = field.StringField(
+		"workato-base-url",
+		field.WithDisplayName("Base URL override"),
+		field.WithDescription("Override the API base URL. Leave empty to use the selected data center; set only for self-hosted proxies or integration tests against the local test server."),
+	)
+
 	WorkatoEnv = field.SelectField(
 		"workato-env",
 		[]string{"dev", "test", "prod", "all"},
@@ -44,6 +53,7 @@ var (
 		WorkatoDataCenterFiekd,
 		WorkatoEnv,
 		DisableCustomRolesSync,
+		BaseUrlField,
 	}
 
 	// FieldRelationships defines relationships between the fields listed in

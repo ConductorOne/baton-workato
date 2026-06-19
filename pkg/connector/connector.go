@@ -48,6 +48,70 @@ func (d *Connector) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error)
 	return &v2.ConnectorMetadata{
 		DisplayName: "Workato",
 		Description: "Connector to sync collaborators, project, folders, roles and privileges from Workato.",
+		AccountCreationSchema: &v2.ConnectorAccountCreationSchema{
+			FieldMap: map[string]*v2.ConnectorAccountCreationSchema_Field{
+				"email": {
+					DisplayName: "Email",
+					Required:    true,
+					Description: "Email address of the collaborator to invite.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "jane.doe@example.com",
+					Order:       1,
+				},
+				"name": {
+					DisplayName: "Name",
+					Required:    true,
+					Description: "Full name of the collaborator to invite.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "Jane Doe",
+					Order:       2,
+				},
+				"dev_role": {
+					DisplayName: "Development Role",
+					Required:    false,
+					Description: "Workato role NAME to assign in the Development environment, e.g. \"Admin\", \"Operator\" or \"Analyst\".",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "Admin",
+					Order:       3,
+				},
+				"test_role": {
+					DisplayName: "Test Role",
+					Required:    false,
+					Description: "Workato role NAME to assign in the Test environment, e.g. \"Admin\", \"Operator\" or \"Analyst\".",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "Operator",
+					Order:       4,
+				},
+				"prod_role": {
+					DisplayName: "Production Role",
+					Required:    false,
+					Description: "Workato role NAME to assign in the Production environment, e.g. \"Admin\", \"Operator\" or \"Analyst\".",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "Analyst",
+					Order:       5,
+				},
+				"user_group_ids": {
+					DisplayName: "User Group IDs",
+					Required:    false,
+					Description: "Comma-separated list of Workato user group string IDs to add the collaborator to, e.g. \"am-WxEKCibh-dTXBtz\".",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "am-WxEKCibh-dTXBtz,am-AbCdEfGh-iJkLmNo",
+					Order:       6,
+				},
+			},
+		},
 	}, nil
 }
 
@@ -79,6 +143,11 @@ func New(ctx context.Context, config *cfg.Workato, _ *cli.ConnectorOpts) (connec
 	}
 
 	dataCenterUrl := client.WorkatoDataCenters[config.WorkatoDataCenter]
+	// base-url override: empty in production (use the data center), set only for
+	// self-hosted proxies or integration tests against cmd/test-server.
+	if config.WorkatoBaseUrl != "" {
+		dataCenterUrl = config.WorkatoBaseUrl
+	}
 
 	env, err := workato.EnvFromString(config.WorkatoEnv)
 	if err != nil {
