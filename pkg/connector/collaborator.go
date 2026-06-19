@@ -342,12 +342,9 @@ func (o *collaboratorBuilder) CreateAccount(
 	}
 
 	// Step 2: build and send the invitation.
-	inviteReq, err := buildInviteRequest(name, email, profileMap)
-	if err != nil {
-		return nil, nil, nil, err
-	}
+	inviteReq := buildInviteRequest(name, email, profileMap)
 
-	err = o.client.InviteCollaborator(ctx, inviteReq)
+	err := o.client.InviteCollaborator(ctx, inviteReq)
 	switch {
 	case err == nil:
 		// invitation sent.
@@ -415,7 +412,7 @@ func (o *collaboratorBuilder) Delete(ctx context.Context, resourceID *v2.Resourc
 // string of group ids. All are optional but Workato generally needs at least one
 // role to make the invite usable, matching the official Workato Team API and the
 // connector's own UpdateCollaboratorRoles shape.
-func buildInviteRequest(name, email string, profileMap map[string]interface{}) (client.InviteCollaboratorRequest, error) {
+func buildInviteRequest(name, email string, profileMap map[string]interface{}) client.InviteCollaboratorRequest {
 	req := client.InviteCollaboratorRequest{
 		Name:  name,
 		Email: email,
@@ -443,7 +440,7 @@ func buildInviteRequest(name, email string, profileMap map[string]interface{}) (
 
 	req.UserGroupIDs = optionalStringListField(profileMap, "user_group_ids")
 
-	return req, nil
+	return req
 }
 
 // optionalStringField returns a trimmed string profile field, or "" when absent.

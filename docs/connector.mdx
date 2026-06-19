@@ -10,7 +10,7 @@ sidebarTitle: Workato
 
 | Resource     | Sync | Provision |
 | :--- | :--- | :--- |
-| Accounts     | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>   |           |       
+| Accounts     | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>   | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>        | 
 | Privileges   | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>   |           | 
 | Roles        | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>   | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>        | 
 | Folders      | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>   |           | 
@@ -39,6 +39,9 @@ Select the following endpoints:
     | **Admin**    | Collaborators        | Get collaborators           | `GET /api/members`                 |
     |              | Collaborators        | Get collaborator            | `GET /api/members/:id`             |
     |              | Collaborators        | Update collaborators’ roles* | `PUT /api/members/:id`             |
+    |              | Collaborators        | Invite collaborator         | `POST /api/member_invitations`     |
+    |              | Collaborators        | Add existing collaborator   | `POST /api/members`                |
+    |              | Collaborators        | Remove collaborator         | `DELETE /api/members/:id`          |
     |              | Collaborators        | Get collaborator privileges | `GET /api/members/:id/privileges`  |
     |              | Collaborator roles   | List non-system roles       | `GET /api/roles`                   |
     |              | Environment roles    | List environment roles†     | `GET /api/environment_roles`       |

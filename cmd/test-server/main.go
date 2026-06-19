@@ -16,10 +16,13 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -57,6 +60,13 @@ type updateRolesRequest struct {
 }
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "test-server: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	state := NewState()
 	mux := http.NewServeMux()
 
@@ -84,10 +94,14 @@ func main() {
 	// https://docs.workato.com/workato-api/folders.html#list-folders
 	mux.HandleFunc("GET /api/folders", auth(handleFolders(state)))
 
-	log.Printf("workato test-server listening on %s (bearer token %q)", listenAddr, testToken)
-	if err := http.ListenAndServe(listenAddr, mux); err != nil {
-		log.Fatalf("test-server: %v", err)
+	srv := &http.Server{
+		Addr:              listenAddr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
+
+	log.Printf("workato test-server listening on %s (bearer token %q)", listenAddr, testToken)
+	return srv.ListenAndServe()
 }
 
 // auth enforces the Bearer scheme the real API requires. A permissive validator
