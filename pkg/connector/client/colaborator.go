@@ -48,17 +48,25 @@ func (c *WorkatoClient) GetCollaboratorPrivileges(ctx context.Context, id int) (
 }
 
 // GetCollaboratorByEmail returns the collaborator matching email, or a NotFound
-// status error if no collaborator in the tenant has that email. Workato has no
-// lookup-by-email endpoint, so this scans the members list.
+// status error if no collaborator in the tenant has that email. The Workato email
+// filter is a substring (contains) match, so we apply an exact case-insensitive
+// check against the returned results.
 func (c *WorkatoClient) GetCollaboratorByEmail(ctx context.Context, email string) (*Collaborator, error) {
-	collaborators, _, err := c.GetCollaborators(ctx)
+	var response CommonPagination[Collaborator]
+
+	uri := c.getPath(collaboratorsPath)
+	query := uri.Query()
+	query.Set("email", email)
+	uri.RawQuery = query.Encode()
+
+	_, err := c.doRequest(ctx, http.MethodGet, uri, &response, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	for i := range collaborators {
-		if strings.EqualFold(collaborators[i].Email, email) {
-			return collaborators[i], nil
+	for i := range response.Data {
+		if strings.EqualFold(response.Data[i].Email, email) {
+			return &response.Data[i], nil
 		}
 	}
 
