@@ -6,21 +6,21 @@ import (
 	"time"
 )
 
+type apiErrorItem struct {
+	Title string `json:"title"`
+}
+
 type ApiError struct {
-	Errors []struct {
-		Title string `json:"title"`
-	} `json:"errors"`
-	Msg     *string `json:"message"`
+	Errors  []apiErrorItem `json:"errors"`
+	Msg     *string        `json:"message"`
 	rawBody string
 }
 
 func (e *ApiError) UnmarshalJSON(data []byte) error {
 	e.rawBody = string(data)
 	type plain struct {
-		Errors []struct {
-			Title string `json:"title"`
-		} `json:"errors"`
-		Msg *string `json:"message"`
+		Errors []apiErrorItem `json:"errors"`
+		Msg    *string        `json:"message"`
 	}
 	var p plain
 	if err := json.Unmarshal(data, &p); err == nil {

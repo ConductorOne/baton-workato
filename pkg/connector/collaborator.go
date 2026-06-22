@@ -89,7 +89,7 @@ func (o *collaboratorBuilder) Grants(ctx context.Context, res *v2.Resource, attr
 	collaboratorRoles, annos, err := o.client.GetCollaboratorPrivileges(ctx, collaboratorId)
 	if err != nil {
 		if status.Code(err) != codes.NotFound {
-			return nil, &rs.SyncOpResults{Annotations: annos}, fmt.Errorf("failed to get collaborator privileges: %w", err)
+			return nil, &rs.SyncOpResults{Annotations: annos}, fmt.Errorf("baton-workato: failed to get collaborator privileges: %w", err)
 		}
 		l.Debug("Collaborator privileges not found, skipping", zap.Int("collaborator_id", collaboratorId))
 		return rv, &rs.SyncOpResults{Annotations: annos}, nil
@@ -188,7 +188,7 @@ func (o *collaboratorBuilder) collaboratorRoleGrants(ctx context.Context, sessio
 		var roleResource *v2.Resource
 
 		switch role.RoleType {
-		case "environment":
+		case roleTypeEnvironment:
 			envRole, err := getEnvironmentRoleByName(ctx, session, role.RoleName)
 			if err != nil {
 				return nil, err
@@ -217,16 +217,16 @@ func (o *collaboratorBuilder) collaboratorRoleGrants(ctx context.Context, sessio
 				},
 			}
 
-		case "privilege_group", "":
+		case roleTypePrivilegeGroup, "":
 			switch {
 			case workato.IsBaseRole(role.RoleName):
 				baseRole, err := workato.GetBaseRole(role.RoleName)
 				if err != nil {
-					return nil, fmt.Errorf("failed to get base role: %w", err)
+					return nil, fmt.Errorf("baton-workato: failed to get base role: %w", err)
 				}
 				targetEnv, err := workato.EnvFromString(role.EnvironmentType)
 				if err != nil {
-					return nil, fmt.Errorf("failed to get target environment from role environment type: %w", err)
+					return nil, fmt.Errorf("baton-workato: failed to get target environment from role environment type: %w", err)
 				}
 				roleResource = &v2.Resource{
 					Id: &v2.ResourceId{
@@ -259,7 +259,7 @@ func (o *collaboratorBuilder) collaboratorRoleGrants(ctx context.Context, sessio
 			}
 
 		default:
-			l.Warn("baton-workato: unknown role type, skipping", zap.String("role_type", role.RoleType), zap.String("role_name", role.RoleName))
+			l.Debug("baton-workato: unknown role type, skipping", zap.String("role_type", role.RoleType), zap.String("role_name", role.RoleName))
 			continue
 		}
 

@@ -39,12 +39,7 @@ func (o *roleBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 // List returns all the Workato base roles and custom roles.
 func (o *roleBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
 	rv := make([]*v2.Resource, 0)
-	var envs []workato.Environment
-	if o.env == workato.All {
-		envs = workato.AllEnvironments()
-	} else {
-		envs = append(envs, o.env)
-	}
+	envs := resolveEnvironments(o.env)
 
 	if !o.disableCustomRolesSync {
 		roles, nextToken, annos, err := o.client.GetRoles(ctx, attr.PageToken.Token)

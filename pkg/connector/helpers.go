@@ -7,6 +7,18 @@ import (
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
 )
 
+const (
+	roleTypeEnvironment    = "environment"
+	roleTypePrivilegeGroup = "privilege_group"
+)
+
+func resolveEnvironments(env workato.Environment) []workato.Environment {
+	if env == workato.All {
+		return workato.AllEnvironments()
+	}
+	return []workato.Environment{env}
+}
+
 func GetRoleResourceID(roleId string, targetEnv workato.Environment, configEnv workato.Environment) string {
 	if configEnv != workato.All {
 		return roleId

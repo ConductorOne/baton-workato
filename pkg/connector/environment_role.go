@@ -40,12 +40,7 @@ func (o *environmentRoleBuilder) List(ctx context.Context, _ *v2.ResourceId, att
 		return nil, &rs.SyncOpResults{Annotations: annos}, err
 	}
 
-	var envs []workato.Environment
-	if o.env == workato.All {
-		envs = workato.AllEnvironments()
-	} else {
-		envs = []workato.Environment{o.env}
-	}
+	envs := resolveEnvironments(o.env)
 
 	rv := make([]*v2.Resource, 0, len(roles)*len(envs))
 	for _, targetEnv := range envs {
@@ -104,7 +99,7 @@ func (o *environmentRoleBuilder) Grant(ctx context.Context, principal *v2.Resour
 	roles := []client.SimpleRole{{
 		RoleName:        envRole.Name,
 		EnvironmentType: envType.String(),
-		RoleType:        "environment",
+		RoleType:        roleTypeEnvironment,
 	}}
 
 	annos, err = o.client.UpdateCollaboratorRoles(ctx, userID, roles)

@@ -109,7 +109,11 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, attr 
 	var rv []*v2.Grant
 
 	folderId := resource.Id.Resource
-	for _, role := range getRoleByFolder(ctx, attr.Session, folderId) {
+	folderRoles, err := getRoleByFolder(ctx, attr.Session, folderId)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, role := range folderRoles {
 		roleID, err := rs.NewResourceID(roleResourceType, role.Id)
 		if err != nil {
 			return nil, nil, err
