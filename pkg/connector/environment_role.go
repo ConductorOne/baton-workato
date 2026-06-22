@@ -68,6 +68,7 @@ func (o *environmentRoleBuilder) StaticEntitlements(_ context.Context, _ rs.Sync
 			entitlement.WithGrantableTo(collaboratorResourceType),
 			entitlement.WithDisplayName("Has environment role"),
 			entitlement.WithDescription("Collaborator is assigned this environment role"),
+			entitlement.WithAnnotation(&v2.EntitlementImmutable{}),
 		),
 	}, nil, nil
 }

@@ -98,6 +98,7 @@ func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ r
 		entitlement.WithGrantableTo(collaboratorResourceType),
 		entitlement.WithDescription(fmt.Sprintf("%s has Collaborator", resource.DisplayName)),
 		entitlement.WithDisplayName(fmt.Sprintf("%s has %s", resource.DisplayName, collaboratorResourceType.DisplayName)),
+		entitlement.WithAnnotation(&v2.EntitlementImmutable{}),
 	}
 	rv = append(rv, entitlement.NewAssignmentEntitlement(resource, collaboratorHasRoleEntitlement, assigmentOptions...))
 
