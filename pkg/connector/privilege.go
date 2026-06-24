@@ -8,7 +8,6 @@ import (
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
-	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
@@ -31,9 +30,6 @@ func (o *privilegeBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 
 // List returns all the privileges.
 func (o *privilegeBuilder) List(ctx context.Context, _ *v2.ResourceId, _ rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
-	l := ctxzap.Extract(ctx)
-	l.Debug("Listing privileges")
-
 	privileges := workato.AllCompoundPrivileges()
 
 	rv := make([]*v2.Resource, 0)

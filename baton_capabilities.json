@@ -16,6 +16,20 @@
     },
     {
       "resourceType": {
+        "id": "environment_role",
+        "displayName": "Environment Role",
+        "traits": [
+          "TRAIT_ROLE"
+        ]
+      },
+      "capabilities": [
+        "CAPABILITY_SYNC",
+        "CAPABILITY_PROVISION"
+      ],
+      "permissions": {}
+    },
+    {
+      "resourceType": {
         "id": "folder",
         "displayName": "Folder"
       },

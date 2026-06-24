@@ -13,25 +13,21 @@ import (
 )
 
 const (
-	rolesCachePrefix       = "roles"
-	folderRolesCachePrefix = "folder_roles"
-	rolesByNameCachePrefix = "roles_by_name"
+	rolesCachePrefix                  = "roles"
+	folderRolesCachePrefix            = "folder_roles"
+	rolesByNameCachePrefix            = "roles_by_name"
+	environmentRolesByNameCachePrefix = "environment_roles_by_name"
 )
 
-func getRoleByFolder(ctx context.Context, sessionStorage sessions.SessionStore, folderID string) []*client.Role {
-	l := ctxzap.Extract(ctx)
-
+func getRoleByFolder(ctx context.Context, sessionStorage sessions.SessionStore, folderID string) ([]*client.Role, error) {
 	folderRoles, found, err := session.GetJSON[[]*client.Role](ctx, sessionStorage, folderID, sessions.WithPrefix(folderRolesCachePrefix))
 	if err != nil {
-		l.Error("failed to get folder roles from session storage", zap.String("folder_id", folderID), zap.Error(err))
-		return nil
+		return nil, fmt.Errorf("baton-workato: failed to get folder roles from cache: %w", err)
 	}
-
 	if !found {
-		return nil
+		return nil, nil
 	}
-
-	return folderRoles
+	return folderRoles, nil
 }
 
 func getRoleById(ctx context.Context, sessionStorage sessions.SessionStore, roleID string) *client.Role {
@@ -50,23 +46,18 @@ func getRoleById(ctx context.Context, sessionStorage sessions.SessionStore, role
 	return role
 }
 
-func getRoleByName(ctx context.Context, sessionStorage sessions.SessionStore, roleName string) *client.Role {
-	l := ctxzap.Extract(ctx)
-
+func getRoleByName(ctx context.Context, sessionStorage sessions.SessionStore, roleName string) (*client.Role, error) {
 	role, found, err := session.GetJSON[*client.Role](ctx, sessionStorage, roleName, sessions.WithPrefix(rolesByNameCachePrefix))
 	if err != nil {
-		l.Error("failed to get role by name from session storage", zap.String("role_name", roleName), zap.Error(err))
-		return nil
+		return nil, fmt.Errorf("baton-workato: failed to get role by name from cache: %w", err)
 	}
-
 	if !found {
-		return nil
+		return nil, nil
 	}
-
-	return role
+	return role, nil
 }
 
-func setRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, roles []client.Role) error {
+func setRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, roles []*client.Role) error {
 	if len(roles) > 0 {
 		err := session.SetManyJSON(ctx, sessionStorage, parseJSONRolesCache(roles), sessions.WithPrefix(rolesCachePrefix))
 		if err != nil {
@@ -78,20 +69,19 @@ func setRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, ro
 	var mapRolesByName = make(map[string]*client.Role)
 
 	for _, role := range roles {
-		copyRole := role
-
 		for _, folderID := range role.FolderIDs {
 			folderIDStr := strconv.Itoa(folderID)
-
-			if roles, ok := mapRoles[folderIDStr]; ok {
-				roles = append(roles, &copyRole)
-				mapRoles[folderIDStr] = roles
-			} else {
-				mapRoles[folderIDStr] = []*client.Role{&copyRole}
+			if _, ok := mapRoles[folderIDStr]; !ok {
+				existing, err := getRoleByFolder(ctx, sessionStorage, folderIDStr)
+				if err != nil {
+					return err
+				}
+				mapRoles[folderIDStr] = existing
 			}
+			mapRoles[folderIDStr] = append(mapRoles[folderIDStr], role)
 		}
 
-		mapRolesByName[copyRole.Name] = &copyRole
+		mapRolesByName[role.Name] = role
 	}
 
 	if (len(mapRoles)) > 0 {
@@ -111,13 +101,35 @@ func setRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, ro
 	return nil
 }
 
-func parseJSONRolesCache(roles []client.Role) map[string]*client.Role {
+func setEnvironmentRolesByNameCache(ctx context.Context, sessionStorage sessions.SessionStore, roles []*client.EnvironmentRole) error {
+	byName := make(map[string]*client.EnvironmentRole, len(roles))
+	for _, role := range roles {
+		byName[role.Name] = role
+	}
+	if len(byName) == 0 {
+		return nil
+	}
+	if err := session.SetManyJSON(ctx, sessionStorage, byName, sessions.WithPrefix(environmentRolesByNameCachePrefix)); err != nil {
+		return fmt.Errorf("baton-workato: failed to set environment roles cache: %w", err)
+	}
+	return nil
+}
+
+func getEnvironmentRoleByName(ctx context.Context, sessionStorage sessions.SessionStore, roleName string) (*client.EnvironmentRole, error) {
+	role, found, err := session.GetJSON[*client.EnvironmentRole](ctx, sessionStorage, roleName, sessions.WithPrefix(environmentRolesByNameCachePrefix))
+	if err != nil {
+		return nil, fmt.Errorf("baton-workato: failed to get environment role by name from cache: %w", err)
+	}
+	if !found {
+		return nil, nil
+	}
+	return role, nil
+}
+
+func parseJSONRolesCache(roles []*client.Role) map[string]*client.Role {
 	rolesMap := make(map[string]*client.Role)
 	for _, role := range roles {
-		roleCopy := role
-
-		roleIDStr := strconv.Itoa(roleCopy.Id)
-		rolesMap[roleIDStr] = &roleCopy
+		rolesMap[strconv.Itoa(role.Id)] = role
 	}
 	return rolesMap
 }

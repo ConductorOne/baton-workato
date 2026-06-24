@@ -543,6 +543,34 @@ Run test cases`,
 				Description: "Delete clients and access profiles.",
 			},
 		},
+		"Decision Models": {
+			Privilege{
+				Id:          "read",
+				Description: "View Decision Models in the workspace.",
+			},
+			Privilege{
+				Id:          "create",
+				Description: "Create Decision Models in the workspace.",
+			},
+			Privilege{
+				Id:          "update",
+				Description: "Edit Decision Models in the workspace.",
+			},
+			Privilege{
+				Id:          "delete",
+				Description: "Delete Decision Models in the workspace.",
+			},
+		},
+		"Manage projects": {
+			Privilege{
+				Id:          "create",
+				Description: "Create projects in the workspace.",
+			},
+			Privilege{
+				Id:          "access_control",
+				Description: "Manage access control for projects in the workspace.",
+			},
+		},
 	}
 )
 

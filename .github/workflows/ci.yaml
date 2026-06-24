@@ -6,17 +6,12 @@ on:
     branches:
       - main
 jobs:
-  test-provisioning:
+  test-grant-legacy-role:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: true
-      matrix:
-        test-case: [roles]
     env:
       BATON_LOG_LEVEL: debug
-      CONNECTOR_PRINCIPAL: "${{ secrets.CONNECTOR_PRINCIPAL }}"
       BATON_WORKATO_API_KEY: ${{ secrets.BATON_WORKATO_API_KEY }}
-      BATON_CONNECTOR: ./baton-workato
+      BATON_WORKATO_DATA_CENTER: sandbox
       BATON_WORKATO_ENV: dev
       BATON_DISABLE_CUSTOM_ROLES_SYNC: true
     steps:
@@ -30,10 +25,42 @@ jobs:
         run: ./scripts/get-baton.sh && mv baton /usr/local/bin
       - name: Build baton-workato
         run: go build ./cmd/baton-workato
-      - name: Run tests for ${{ matrix.test-case }}
-        run: |-
-          case "${{ matrix.test-case }}" in
-            "roles")
-              BATON_SKIP_REVOKE=1 ./scripts/validate-grant.sh ${{ env.CONNECTOR_PRINCIPAL }} collaborator role:Operator:collaborator-has role:Operator:collaborator-has:collaborator:${{ env.CONNECTOR_PRINCIPAL }}
-              ;;
-          esac
+      - name: Sync
+        run: ./baton-workato
+      - name: Grant Operator role
+        run: ./baton-workato --grant-entitlement="role:Operator:collaborator-has" --grant-principal="${{ secrets.CONNECTOR_PRINCIPAL }}" --grant-principal-type="collaborator"
+      - name: Grant Operator role again (idempotency)
+        run: ./baton-workato --grant-entitlement="role:Operator:collaborator-has" --grant-principal="${{ secrets.CONNECTOR_PRINCIPAL }}" --grant-principal-type="collaborator"
+      - name: Sync and verify grant
+        run: |
+          ./baton-workato
+          baton grants --entitlement="role:Operator:collaborator-has" --output-format=json | jq --exit-status ".grants[] | select(.principal.id.resource == \"${{ secrets.CONNECTOR_PRINCIPAL }}\")"
+
+  test-grant-environment-role:
+    runs-on: ubuntu-latest
+    env:
+      BATON_LOG_LEVEL: debug
+      BATON_WORKATO_API_KEY: ${{ secrets.BATON_WORKATO_API_KEY }}
+      BATON_WORKATO_DATA_CENTER: sandbox
+      BATON_WORKATO_ENV: dev
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install baton
+        run: ./scripts/get-baton.sh && mv baton /usr/local/bin
+      - name: Build baton-workato
+        run: go build ./cmd/baton-workato
+      - name: Sync
+        run: ./baton-workato
+      - name: Grant environment role
+        run: ./baton-workato --grant-entitlement="${{ vars.BATON_ENTITLEMENT_ENV_ROLE }}" --grant-principal="${{ secrets.CONNECTOR_PRINCIPAL }}" --grant-principal-type="collaborator"
+      - name: Grant environment role again (idempotency)
+        run: ./baton-workato --grant-entitlement="${{ vars.BATON_ENTITLEMENT_ENV_ROLE }}" --grant-principal="${{ secrets.CONNECTOR_PRINCIPAL }}" --grant-principal-type="collaborator"
+      - name: Sync and verify grant
+        run: |
+          ./baton-workato
+          baton grants --entitlement="${{ vars.BATON_ENTITLEMENT_ENV_ROLE }}" --output-format=json | jq --exit-status ".grants[] | select(.principal.id.resource == \"${{ secrets.CONNECTOR_PRINCIPAL }}\")"

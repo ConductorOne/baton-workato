@@ -2,10 +2,14 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 
+	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"google.golang.org/grpc/codes"
 )
@@ -30,8 +34,9 @@ func (c *WorkatoClient) getPath(path string) *url.URL {
 	return c.baseUrl.JoinPath(path)
 }
 
-func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress *url.URL, res any, body any) error {
+func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress *url.URL, res any, body any) (annotations.Annotations, error) {
 	var resp *http.Response
+	var rateLimitData v2.RateLimitDescription
 
 	reqOpts := []uhttp.RequestOption{uhttp.WithBearerToken(c.apiKey)}
 	if body != nil {
@@ -40,33 +45,46 @@ func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress
 
 	req, err := c.httpClient.NewRequest(ctx, method, urlAddress, reqOpts...)
 	if err != nil {
-		return fmt.Errorf("baton-workato: failed to create HTTP request: %w", err)
+		return nil, fmt.Errorf("baton-workato: failed to create HTTP request: %w", err)
 	}
 
-	doOpts := []uhttp.DoOption{uhttp.WithErrorResponse(&ApiError{})}
+	doOpts := []uhttp.DoOption{
+		uhttp.WithErrorResponse(&ApiError{}),
+		uhttp.WithRatelimitData(&rateLimitData),
+	}
 	if res != nil {
 		doOpts = append(doOpts, uhttp.WithResponse(&res))
 	}
 
 	resp, err = c.httpClient.Do(req, doOpts...)
+	var annos annotations.Annotations
+	annos.WithRateLimiting(&rateLimitData)
 	if err != nil {
-		return err
+		return annos, err
 	}
 	if resp == nil {
-		return uhttp.WrapErrors(codes.Internal, "baton-workato doRequest: response is nil with no error, this should never happen")
+		return annos, uhttp.WrapErrors(codes.Internal, "baton-workato doRequest: response is nil with no error, this should never happen")
 	}
 
 	defer resp.Body.Close()
 
-	return nil
+	return annos, nil
 }
 
-func nextToken[T any](c *WorkatoClient, response []T, page int) string {
-	token := ""
-
-	if len(response) == c.pageLimit {
-		token = fmt.Sprintf("%d", page+1)
+func nextToken[T any](response []T, page int) string {
+	if len(response) == 0 {
+		return ""
 	}
+	return fmt.Sprintf("%d", page+1)
+}
 
-	return token
+func parsePageToken(pToken string, defaultPage int) (int, error) {
+	if pToken == "" {
+		return defaultPage, nil
+	}
+	page, err := strconv.Atoi(pToken)
+	if err != nil {
+		return 0, errors.Join(ErrInvalidPaginationToken, err)
+	}
+	return page, nil
 }

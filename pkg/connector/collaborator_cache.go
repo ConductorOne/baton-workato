@@ -26,10 +26,10 @@ const (
 	collaboratorNamespace = "collaborator"
 )
 
-func (c *collaboratorCache) setCollaboratorsCache(ctx context.Context, sessionStorage sessions.SessionStore, collaborators []client.Collaborator) error {
+func (c *collaboratorCache) setCollaboratorsCache(ctx context.Context, sessionStorage sessions.SessionStore, collaborators []*client.Collaborator) error {
 	collaboratorMap := make(map[string]*client.Collaborator)
 	for _, collaborator := range collaborators {
-		collaboratorMap[strconv.Itoa(collaborator.Id)] = &collaborator
+		collaboratorMap[strconv.Itoa(collaborator.Id)] = collaborator
 	}
 	err := session.SetManyJSON(ctx, sessionStorage, collaboratorMap, sessions.WithPrefix(collaboratorNamespace))
 	if err != nil {

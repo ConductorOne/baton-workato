@@ -1,18 +1,47 @@
 package client
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 )
 
+type apiErrorItem struct {
+	Title string `json:"title"`
+}
+
 type ApiError struct {
-	Msg *string `json:"message"`
+	Errors  []apiErrorItem `json:"errors"`
+	Msg     *string        `json:"message"`
+	rawBody string
+}
+
+func (e *ApiError) UnmarshalJSON(data []byte) error {
+	e.rawBody = string(data)
+	type plain struct {
+		Errors []apiErrorItem `json:"errors"`
+		Msg    *string        `json:"message"`
+	}
+	var p plain
+	if err := json.Unmarshal(data, &p); err == nil {
+		e.Errors = p.Errors
+		e.Msg = p.Msg
+	}
+	// Unmarshal error intentionally ignored: rawBody is always captured above as fallback,
+	// so Message() can surface the raw API response when structured parsing fails.
+	return nil
 }
 
 // Message implements the error interface.
 func (e *ApiError) Message() string {
-	if e.Msg != nil {
+	if len(e.Errors) > 0 && e.Errors[0].Title != "" {
+		return e.Errors[0].Title
+	}
+	if e.Msg != nil && *e.Msg != "" {
 		return fmt.Sprintf("message: %s", *e.Msg)
+	}
+	if e.rawBody != "" {
+		return e.rawBody
 	}
 	return "unknown error"
 }
@@ -25,6 +54,16 @@ type CommonPagination[T any] struct {
 type SimpleRole struct {
 	EnvironmentType string `json:"environment_type"`
 	RoleName        string `json:"role_name"`
+	RoleType        string `json:"role_type"`
+}
+
+type EnvironmentRole struct {
+	Id           int       `json:"id"`
+	Name         string    `json:"name"`
+	Type         string    `json:"type"`
+	MembersCount int       `json:"members_count"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 func (s *SimpleRole) Equals(other SimpleRole) bool {

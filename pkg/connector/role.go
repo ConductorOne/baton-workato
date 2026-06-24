@@ -2,7 +2,6 @@ package connector
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -15,9 +14,8 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
-	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -34,75 +32,63 @@ type roleBuilder struct {
 	disableCustomRolesSync bool
 }
 
-func GetRoleResourceID(roleId string, targetEnv workato.Environment, configEnv workato.Environment) string {
-	// For backward compatibility, do not change the role IDs if the environment configuration is set to a specific environment.
-	if configEnv != workato.All {
-		return roleId
-	}
-	return fmt.Sprintf("%s-%s", roleId, targetEnv.String())
-}
-
 func (o *roleBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 	return roleResourceType
 }
 
 // List returns all the Workato base roles and custom roles.
 func (o *roleBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
-	l := ctxzap.Extract(ctx)
-	l.Debug("Listing roles")
-
 	rv := make([]*v2.Resource, 0)
-
-	var nextToken string
-
-	var envs []workato.Environment
-	if o.env == workato.All {
-		envs = workato.AllEnvironments()
-	} else {
-		envs = append(envs, o.env)
-	}
+	envs := resolveEnvironments(o.env)
 
 	if !o.disableCustomRolesSync {
-		var roles []client.Role
-		var err error
-		roles, nextToken, err = o.client.GetRoles(ctx, attr.PageToken.Token)
+		roles, nextToken, annos, err := o.client.GetRoles(ctx, attr.PageToken.Token)
 		if err != nil {
-			return nil, nil, err
+			return nil, &rs.SyncOpResults{Annotations: annos}, err
 		}
 
-		// cache roles
-		err = setRolesCache(ctx, attr.Session, roles)
-		if err != nil {
-			return nil, nil, err
+		if err = setRolesCache(ctx, attr.Session, roles); err != nil {
+			return nil, &rs.SyncOpResults{Annotations: annos}, err
 		}
 
 		for _, targetEnv := range envs {
 			for _, role := range roles {
-				us, err := roleResource(&role, o.env, targetEnv)
+				us, err := roleResource(role, o.env, targetEnv)
 				if err != nil {
-					return nil, nil, err
+					return nil, &rs.SyncOpResults{Annotations: annos}, err
 				}
 				rv = append(rv, us)
 			}
 		}
-	}
 
-	if nextToken == "" {
-		// Add base roles
+		if nextToken != "" {
+			return rv, &rs.SyncOpResults{NextPageToken: nextToken, Annotations: annos}, nil
+		}
+
+		// Last page of custom roles: append base roles and return with rate limit propagated
 		for _, targetEnv := range envs {
 			for _, role := range workato.BaseRoles {
 				us, err := workatoBaseRoleResource(&role, o.env, targetEnv)
 				if err != nil {
-					return nil, nil, err
+					return nil, &rs.SyncOpResults{Annotations: annos}, err
 				}
 				rv = append(rv, us)
 			}
 		}
+		return rv, &rs.SyncOpResults{Annotations: annos}, nil
 	}
 
-	return rv, &rs.SyncOpResults{
-		NextPageToken: nextToken,
-	}, nil
+	// Custom roles sync disabled: only base roles, no API call
+	for _, targetEnv := range envs {
+		for _, role := range workato.BaseRoles {
+			us, err := workatoBaseRoleResource(&role, o.env, targetEnv)
+			if err != nil {
+				return nil, nil, err
+			}
+			rv = append(rv, us)
+		}
+	}
+	return rv, nil, nil
 }
 
 // Entitlements returns an entitlement for the role to be assigned to a collaborator.
@@ -112,6 +98,7 @@ func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ r
 		entitlement.WithGrantableTo(collaboratorResourceType),
 		entitlement.WithDescription(fmt.Sprintf("%s has Collaborator", resource.DisplayName)),
 		entitlement.WithDisplayName(fmt.Sprintf("%s has %s", resource.DisplayName, collaboratorResourceType.DisplayName)),
+		entitlement.WithAnnotation(&v2.EntitlementImmutable{}),
 	}
 	rv = append(rv, entitlement.NewAssignmentEntitlement(resource, collaboratorHasRoleEntitlement, assigmentOptions...))
 
@@ -120,7 +107,6 @@ func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ r
 
 // Grants returns the privileges granted to a role.
 func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
-	l := ctxzap.Extract(ctx)
 	rv := make([]*v2.Grant, 0)
 
 	roleTrait, err := rs.GetRoleTrait(resource)
@@ -179,7 +165,6 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs
 		// privilege grants implementation
 		role := getRoleById(ctx, attr.Session, roleId)
 		if role == nil {
-			l.Warn("role not found", zap.String("role_name", resource.DisplayName), zap.String("role_id", roleId))
 			return rv, nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("role %s (%s) not found", resource.DisplayName, roleId))
 		}
 
@@ -230,37 +215,30 @@ func (o *roleBuilder) Grant(ctx context.Context, principal *v2.Resource, entitle
 
 	roleTrait, err := rs.GetRoleTrait(entitlement.Resource)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("baton-workato: failed to get role trait: %w", err)
 	}
 	profile := roleTrait.GetProfile()
 	if profile == nil {
-		return nil, nil, fmt.Errorf("role profile not found")
+		return nil, nil, fmt.Errorf("baton-workato: role profile is nil on resource %s", entitlement.Resource.Id.Resource)
 	}
 	roleName, ok := profile.AsMap()["name"].(string)
 	if !ok {
-		return nil, nil, fmt.Errorf("role name is missing or invalid")
-	}
-	environmentType, ok := profile.AsMap()["environment"].(string)
-	if !ok {
-		return nil, nil, fmt.Errorf("environment value is missing or invalid")
+		return nil, nil, fmt.Errorf("baton-workato: role name missing from profile on resource %s", entitlement.Resource.Id.Resource)
 	}
 
-	roles := []client.SimpleRole{
-		{
-			RoleName:        roleName,
-			EnvironmentType: environmentType,
-		},
-	}
-
-	l := ctxzap.Extract(ctx)
-	rolesJSON, err := json.Marshal(roles)
+	_, envType, err := parseRoleResourceID(entitlement.Resource.Id.Resource, o.env)
 	if err != nil {
 		return nil, nil, err
 	}
-	l.Info("Updating collaborator roles", zap.Int("user_id", userID), zap.String("roles", string(rolesJSON)))
-	err = o.client.UpdateCollaboratorRoles(ctx, userID, roles)
+
+	roles := []client.SimpleRole{{
+		RoleName:        roleName,
+		EnvironmentType: envType.String(),
+	}}
+
+	annos, err := o.client.UpdateCollaboratorRoles(ctx, userID, roles)
 	if err != nil {
-		return nil, nil, err
+		return nil, annos, err
 	}
 
 	newGrant := grant.NewGrant(
@@ -268,15 +246,14 @@ func (o *roleBuilder) Grant(ctx context.Context, principal *v2.Resource, entitle
 		collaboratorHasRoleEntitlement,
 		principal.Id,
 		grant.WithGrantMetadata(map[string]interface{}{
-			"environment_type": environmentType,
+			"environment_type": envType.String(),
 		}),
 	)
-
-	return []*v2.Grant{newGrant}, nil, nil
+	return []*v2.Grant{newGrant}, annos, nil
 }
 
-func (o *roleBuilder) Revoke(_ context.Context, grant *v2.Grant) (annotations.Annotations, error) {
-	return nil, fmt.Errorf("revoke not implemented for %s", grant.Principal.Id.ResourceType)
+func (o *roleBuilder) Revoke(_ context.Context, _ *v2.Grant) (annotations.Annotations, error) {
+	return nil, status.Errorf(codes.Unimplemented, "baton-workato: revoke is not supported for legacy roles")
 }
 
 func newRoleBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) *roleBuilder {

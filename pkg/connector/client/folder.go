@@ -2,40 +2,36 @@ package client
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
+
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 )
 
-func (c *WorkatoClient) GetFolders(ctx context.Context, parentId *int, pToken string) ([]Folder, string, error) {
-	var response []Folder
-	var err error
+// GetFolders returns a paginated list of folders, optionally filtered by parent folder.
+// GET /api/folders — https://docs.workato.com/workato-api/folders.html
+// Uses 0-based page pagination parameter.
+// Required permission: Manage team members (API key scope).
+func (c *WorkatoClient) GetFolders(ctx context.Context, parentId *int, pToken string) ([]*Folder, string, annotations.Annotations, error) {
+	var response []*Folder
 
-	page := 0
-	if pToken != "" {
-		page, err = strconv.Atoi(pToken)
-		if err != nil {
-			return nil, "", errors.Join(ErrInvalidPaginationToken, err)
-		}
+	page, err := parsePageToken(pToken, 0)
+	if err != nil {
+		return nil, "", nil, err
 	}
 
-	uri := c.getPath(GetFoldersPath)
-
+	uri := c.getPath(foldersPath)
 	query := uri.Query()
-	query.Add("per_page", fmt.Sprintf("%d", c.pageLimit))
 	query.Add("page", fmt.Sprintf("%d", page))
-
 	if parentId != nil {
 		query.Add("parent_id", fmt.Sprintf("%d", *parentId))
 	}
-
 	uri.RawQuery = query.Encode()
 
-	err = c.doRequest(ctx, http.MethodGet, uri, &response, nil)
+	annos, err := c.doRequest(ctx, http.MethodGet, uri, &response, nil)
 	if err != nil {
-		return nil, "", err
+		return nil, "", annos, err
 	}
 
-	return response, nextToken(c, response, page), nil
+	return response, nextToken(response, page), annos, nil
 }
