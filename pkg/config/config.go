@@ -28,6 +28,7 @@ var (
 		"workato-base-url",
 		field.WithDisplayName("Base URL override"),
 		field.WithDescription("Override the API base URL. Leave empty to use the selected data center; set only for self-hosted proxies or integration tests against the local test server."),
+		field.WithExportTarget(field.ExportTargetCLIOnly),
 	)
 
 	WorkatoEnv = field.SelectField(

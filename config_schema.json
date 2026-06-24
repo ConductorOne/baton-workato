@@ -144,12 +144,6 @@
       "displayName": "Disable custom roles sync",
       "description": "Whether to disable custom roles sync or not",
       "boolField": {}
-    },
-    {
-      "name": "workato-base-url",
-      "displayName": "Base URL override",
-      "description": "Override the API base URL. Leave empty to use the selected data center; set only for self-hosted proxies or integration tests against the local test server.",
-      "stringField": {}
     }
   ],
   "displayName": "Workato",
