@@ -18,9 +18,8 @@ import (
 var (
 	// Collaborator (member) provisioning paths.
 	// https://docs.workato.com/workato-api/team.html
-	InviteCollaboratorPath     = "api/member_invitations"
-	AddCollaboratorPath        = "api/members"
-	DeleteCollaboratorByIdPath = "api/members/%d"
+	InviteCollaboratorPath = "api/member_invitations"
+	AddCollaboratorPath    = "api/members"
 
 	AuthHeaderName = "Authorization"
 
