@@ -138,9 +138,10 @@ func handleInvite(s *State) http.HandlerFunc {
 			writeErr(w, http.StatusBadRequest, "email is required")
 			return
 		}
-		// The real API requires a role/group for the invite to be usable; mirror
-		// the 400 the connector's invite-shape fix was made to satisfy.
-		if len(req.EnvRoles) == 0 && len(req.UserGroupIDs) == 0 {
+		// The real API requires env_roles on every invite — a user group does NOT
+		// satisfy it (verified: a group-only invite 400s like an empty one). Mirror
+		// that so the connector's guard is exercised against accurate behavior.
+		if len(req.EnvRoles) == 0 {
 			writeErr(w, http.StatusBadRequest, "role_name or env_roles is required")
 			return
 		}

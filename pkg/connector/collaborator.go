@@ -345,6 +345,15 @@ func (o *collaboratorBuilder) CreateAccount(
 	// the name against the environment-roles catalog; unresolved names default to
 	// privilege_group on Workato's side.
 	inviteReq := buildInviteRequest(name, email, profileMap)
+
+	// Workato requires at least one environment role on every invitation — a user
+	// group does NOT satisfy it (verified against the live API: a group-only invite
+	// 400s with "role_name or env_roles is required" just like an empty one). Fail
+	// early with a clear message instead of round-tripping to that opaque 400.
+	if len(inviteReq.EnvRoles) == 0 {
+		return nil, nil, nil, fmt.Errorf("baton-workato: create account: at least one environment role (dev_role/test_role/prod_role) is required")
+	}
+
 	resolveEnvRoleTypes(ctx, o.client, inviteReq.EnvRoles)
 
 	err := o.client.InviteCollaborator(ctx, inviteReq)
