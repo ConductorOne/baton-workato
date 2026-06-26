@@ -320,20 +320,20 @@ func (o *collaboratorBuilder) CreateAccount(
 	}
 	email = strings.TrimSpace(email)
 	if email == "" {
-		return nil, nil, nil, fmt.Errorf("baton-workato: create account: email is required")
+		return nil, nil, nil, status.Errorf(codes.InvalidArgument, "baton-workato: create account: email is required")
 	}
 
 	name, _ := profileMap["name"].(string)
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return nil, nil, nil, fmt.Errorf("baton-workato: create account: name is required")
+		return nil, nil, nil, status.Errorf(codes.InvalidArgument, "baton-workato: create account: name is required")
 	}
 
 	// Step 1: short-circuit if the collaborator already exists in this tenant.
 	if existing, err := o.client.GetCollaboratorByEmail(ctx, email); err == nil {
 		res, resErr := collaboratorResource(existing)
 		if resErr != nil {
-			return nil, nil, nil, resErr
+			return nil, nil, nil, fmt.Errorf("baton-workato: create account: build resource: %w", resErr)
 		}
 		l.Debug("collaborator already exists, returning AlreadyExistsResult", zap.String("email", email))
 		return &v2.CreateAccountResponse_AlreadyExistsResult{Resource: res}, nil, nil, nil
@@ -351,7 +351,7 @@ func (o *collaboratorBuilder) CreateAccount(
 	// 400s with "role_name or env_roles is required" just like an empty one). Fail
 	// early with a clear message instead of round-tripping to that opaque 400.
 	if len(inviteReq.EnvRoles) == 0 {
-		return nil, nil, nil, fmt.Errorf("baton-workato: create account: at least one environment role (dev_role/test_role/prod_role) is required")
+		return nil, nil, nil, status.Errorf(codes.InvalidArgument, "baton-workato: create account: at least one environment role (dev_role/test_role/prod_role) is required")
 	}
 
 	resolveEnvRoleTypes(ctx, o.client, inviteReq.EnvRoles)
@@ -389,7 +389,7 @@ func (o *collaboratorBuilder) CreateAccount(
 
 	res, err := collaboratorResource(created)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("baton-workato: create account: build resource: %w", err)
 	}
 
 	return &v2.CreateAccountResponse_SuccessResult{

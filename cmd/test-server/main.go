@@ -123,6 +123,19 @@ func auth(next http.HandlerFunc) http.HandlerFunc {
 func handleListMembers(s *State) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		members := s.ListMembers()
+		// Workato's ?email= filter is a case-insensitive substring (contains)
+		// match. Mirror it so the connector's exact-match-on-top resolution is
+		// exercised against accurate API behavior rather than the full list.
+		if q := strings.TrimSpace(r.URL.Query().Get("email")); q != "" {
+			needle := strings.ToLower(q)
+			filtered := make([]Collaborator, 0, len(members))
+			for _, m := range members {
+				if strings.Contains(strings.ToLower(m.Email), needle) {
+					filtered = append(filtered, m)
+				}
+			}
+			members = filtered
+		}
 		writeJSON(w, http.StatusOK, commonPagination[Collaborator]{Data: members, Total: len(members)})
 	}
 }
