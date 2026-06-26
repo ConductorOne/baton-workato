@@ -10,11 +10,14 @@ import (
 // (see pkg/connector/client/models.go). They are intentionally duplicated here
 // so the test server has no dependency on the connector packages.
 
-// SimpleRole is a per-environment role assignment on a collaborator.
+// SimpleRole is a per-environment role assignment on a collaborator. RoleType is
+// "environment" for environment-type roles and empty (privilege_group) otherwise,
+// mirroring what the connector sends and what list-collaborators returns.
 // https://docs.workato.com/workato-api/team.html#list-collaborators
 type SimpleRole struct {
 	EnvironmentType string `json:"environment_type"`
 	RoleName        string `json:"role_name"`
+	RoleType        string `json:"role_type,omitempty"`
 }
 
 // Collaborator mirrors a Workato team member.
@@ -40,6 +43,19 @@ type Role struct {
 	CreatedAt   time.Time           `json:"created_at"`
 	UpdatedAt   time.Time           `json:"updated_at"`
 	Privileges  map[string][]string `json:"privileges"`
+}
+
+// EnvironmentRole mirrors a Workato environment role. The connector resolves an
+// invite role name against these to decide its role_type, and syncs them as the
+// environment_role resource type.
+// https://docs.workato.com/workato-api/environment-roles.html#list-environment-roles
+type EnvironmentRole struct {
+	Id           int       `json:"id"`
+	Name         string    `json:"name"`
+	Type         string    `json:"type"`
+	MembersCount int       `json:"members_count"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // Folder mirrors a Workato folder.
@@ -70,9 +86,10 @@ type State struct {
 	memberOrder []int
 	nextID      int
 
-	roles    []Role
-	folders  []Folder
-	projects []Project
+	roles            []Role
+	environmentRoles []EnvironmentRole
+	folders          []Folder
+	projects         []Project
 }
 
 var seedTime = time.Date(2024, time.January, 2, 15, 4, 5, 0, time.UTC)
@@ -103,6 +120,13 @@ func seed(s *State) {
 	s.roles = []Role{
 		{Id: 1, Name: "Custom Reviewer", Inheritable: false, FolderIDs: []int{}, CreatedAt: seedTime, UpdatedAt: seedTime, Privileges: map[string][]string{}},
 		{Id: 2, Name: "Custom Auditor", Inheritable: true, FolderIDs: []int{}, CreatedAt: seedTime, UpdatedAt: seedTime, Privileges: map[string][]string{}},
+	}
+
+	// Environment roles let the invite path resolve a role name to role_type
+	// "environment"; names absent here (e.g. "Admin") fall back to privilege_group.
+	s.environmentRoles = []EnvironmentRole{
+		{Id: 50, Name: "Deployer", Type: "environment", MembersCount: 0, CreatedAt: seedTime, UpdatedAt: seedTime},
+		{Id: 51, Name: "Releaser", Type: "environment", MembersCount: 0, CreatedAt: seedTime, UpdatedAt: seedTime},
 	}
 
 	s.folders = []Folder{
@@ -204,6 +228,12 @@ func (s *State) Roles() []Role {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return slices.Clone(s.roles)
+}
+
+func (s *State) EnvironmentRoles() []EnvironmentRole {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.environmentRoles)
 }
 
 func (s *State) Folders() []Folder {

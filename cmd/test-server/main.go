@@ -42,6 +42,7 @@ type commonPagination[T any] struct {
 type inviteEnvRole struct {
 	EnvironmentType string `json:"environment_type"`
 	Name            string `json:"name"`
+	RoleType        string `json:"role_type"`
 }
 
 type inviteRequest struct {
@@ -89,6 +90,8 @@ func run() error {
 	mux.HandleFunc("DELETE /api/members/{id}", auth(handleDeleteMember(state)))
 	// https://docs.workato.com/workato-api/roles.html#list-roles
 	mux.HandleFunc("GET /api/roles", auth(handleRoles(state)))
+	// https://docs.workato.com/workato-api/environment-roles.html#list-environment-roles
+	mux.HandleFunc("GET /api/environment_roles", auth(handleEnvironmentRoles(state)))
 	// https://docs.workato.com/workato-api/projects.html#list-projects
 	mux.HandleFunc("GET /api/projects", auth(handleProjects(state)))
 	// https://docs.workato.com/workato-api/folders.html#list-folders
@@ -149,7 +152,7 @@ func handleInvite(s *State) http.HandlerFunc {
 		// live API instead.
 		roles := make([]SimpleRole, 0, len(req.EnvRoles))
 		for _, er := range req.EnvRoles {
-			roles = append(roles, SimpleRole{EnvironmentType: er.EnvironmentType, RoleName: er.Name})
+			roles = append(roles, SimpleRole{EnvironmentType: er.EnvironmentType, RoleName: er.Name, RoleType: er.RoleType})
 		}
 
 		if _, exists := s.CreateMember(req.Name, req.Email, roles); exists {
@@ -214,7 +217,7 @@ func handleUpdateMember(s *State) http.HandlerFunc {
 		}
 		roles := make([]SimpleRole, 0, len(req.EnvRoles))
 		for _, er := range req.EnvRoles {
-			roles = append(roles, SimpleRole{EnvironmentType: er.EnvironmentType, RoleName: er.Name})
+			roles = append(roles, SimpleRole{EnvironmentType: er.EnvironmentType, RoleName: er.Name, RoleType: er.RoleType})
 		}
 		if ok := s.UpdateMemberRoles(id, roles); !ok {
 			writeErr(w, http.StatusNotFound, "collaborator not found")
@@ -245,6 +248,27 @@ func handleRoles(s *State) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		roles := s.Roles()
 		writeJSON(w, http.StatusOK, paginate(r, roles))
+	}
+}
+
+// handleEnvironmentRoles serves GET /api/environment_roles. It supports the ?name=
+// exact-match filter the connector uses to resolve an invite role's type, and
+// page[number]/page[size] pagination for environment-role sync. The response is the
+// {data, total} envelope the client decodes into CommonPagination.
+func handleEnvironmentRoles(s *State) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		roles := s.EnvironmentRoles()
+		if name := r.URL.Query().Get("name"); name != "" {
+			filtered := roles[:0:0]
+			for _, role := range roles {
+				if role.Name == name {
+					filtered = append(filtered, role)
+				}
+			}
+			roles = filtered
+		}
+		roles = paginateNumbered(r, roles)
+		writeJSON(w, http.StatusOK, commonPagination[EnvironmentRole]{Data: roles, Total: len(roles)})
 	}
 }
 
@@ -284,6 +308,22 @@ func paginate[T any](r *http.Request, all []T) []T {
 		}
 	}
 	if page > 0 {
+		return []T{}
+	}
+	return all
+}
+
+// paginateNumbered mirrors the page[number]/page[size] contract of the
+// environment-roles endpoint: the connector requests page 1 and keeps paging until
+// a page comes back empty, so any page beyond the first returns no rows here.
+func paginateNumbered[T any](r *http.Request, all []T) []T {
+	page := 1
+	if raw := r.URL.Query().Get("page[number]"); raw != "" {
+		if p, err := strconv.Atoi(raw); err == nil {
+			page = p
+		}
+	}
+	if page > 1 {
 		return []T{}
 	}
 	return all

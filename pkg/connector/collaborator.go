@@ -341,8 +341,11 @@ func (o *collaboratorBuilder) CreateAccount(
 		return nil, nil, nil, fmt.Errorf("baton-workato: create account: failed to look up collaborator %s: %w", email, err)
 	}
 
-	// Step 2: build and send the invitation.
+	// Step 2: build and send the invitation. Tag each role's role_type by resolving
+	// the name against the environment-roles catalog; unresolved names default to
+	// privilege_group on Workato's side.
 	inviteReq := buildInviteRequest(name, email, profileMap)
+	resolveEnvRoleTypes(ctx, o.client, inviteReq.EnvRoles)
 
 	err := o.client.InviteCollaborator(ctx, inviteReq)
 	switch {
@@ -441,6 +444,49 @@ func buildInviteRequest(name, email string, profileMap map[string]interface{}) c
 	req.UserGroupIDs = optionalStringListField(profileMap, "user_group_ids")
 
 	return req
+}
+
+// environmentRoleResolver looks up an environment role by name. *client.WorkatoClient
+// satisfies it; tests use a fake. Kept narrow so resolveEnvRoleTypes is unit-testable
+// without a live API or the concrete client.
+type environmentRoleResolver interface {
+	GetEnvironmentRoleByName(ctx context.Context, name string) (*client.EnvironmentRole, annotations.Annotations, error)
+}
+
+// resolveEnvRoleTypes tags each invite role with its role_type. A role name that
+// resolves to an environment role gets RoleType "environment"; everything else is
+// left empty so Workato applies its "privilege_group" default. This brings the
+// invite path to parity with the grant flow (role.go vs environment_role.go), which
+// already distinguishes the two role types.
+//
+// Lookups are deduplicated by name and degrade gracefully: a lookup error is logged
+// and the role falls back to the privilege_group default (the connector's prior
+// behavior), so a transient environment_roles failure never breaks an otherwise
+// valid privilege-group invite.
+func resolveEnvRoleTypes(ctx context.Context, resolver environmentRoleResolver, roles []client.InviteEnvRole) {
+	l := ctxzap.Extract(ctx)
+	isEnvRole := make(map[string]bool, len(roles))
+
+	for i := range roles {
+		name := roles[i].Name
+
+		resolved, seen := isEnvRole[name]
+		if !seen {
+			envRole, _, err := resolver.GetEnvironmentRoleByName(ctx, name)
+			if err != nil {
+				l.Debug("baton-workato: create account: environment role lookup failed; defaulting to privilege_group",
+					zap.String("role_name", name), zap.Error(err))
+				isEnvRole[name] = false
+				continue
+			}
+			resolved = envRole != nil
+			isEnvRole[name] = resolved
+		}
+
+		if resolved {
+			roles[i].RoleType = roleTypeEnvironment
+		}
+	}
 }
 
 // optionalStringField returns a trimmed string profile field, or "" when absent.

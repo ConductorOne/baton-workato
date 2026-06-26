@@ -73,11 +73,13 @@ func (s *SimpleRole) Equals(other SimpleRole) bool {
 
 // InviteEnvRole is a single per-environment role assignment in a member
 // invitation. Name is the role NAME (e.g. "Admin"/"Operator"/"Analyst"), not a
-// numeric id, matching the official Workato Team API.
+// numeric id, matching the official Workato Team API. RoleType is "environment"
+// for environment-type roles; when empty Workato defaults it to "privilege_group".
 // https://docs.workato.com/workato-api/team.html#invite-a-collaborator
 type InviteEnvRole struct {
 	EnvironmentType string `json:"environment_type"`
 	Name            string `json:"name"`
+	RoleType        string `json:"role_type,omitempty"`
 }
 
 // InviteCollaboratorRequest is the body for POST /api/member_invitations. It sends

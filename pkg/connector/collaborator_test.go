@@ -1,9 +1,12 @@
 package connector
 
 import (
+	"context"
+	"errors"
 	"reflect"
 	"testing"
 
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 )
 
@@ -93,5 +96,96 @@ func TestBuildInviteRequest(t *testing.T) {
 				t.Errorf("buildInviteRequest() = %#v, want %#v", got, tt.expected)
 			}
 		})
+	}
+}
+
+// fakeEnvRoleResolver returns an environment role for any name in envRoleNames, and
+// an error for any name in errNames (checked first), modelling a not-found as
+// (nil, nil, nil) the way the real client does.
+type fakeEnvRoleResolver struct {
+	envRoleNames map[string]bool
+	errNames     map[string]bool
+	calls        map[string]int
+}
+
+func (f *fakeEnvRoleResolver) GetEnvironmentRoleByName(_ context.Context, name string) (*client.EnvironmentRole, annotations.Annotations, error) {
+	if f.calls == nil {
+		f.calls = make(map[string]int)
+	}
+	f.calls[name]++
+	if f.errNames[name] {
+		return nil, nil, errors.New("lookup failed")
+	}
+	if f.envRoleNames[name] {
+		return &client.EnvironmentRole{Name: name}, nil, nil
+	}
+	return nil, nil, nil
+}
+
+func TestResolveEnvRoleTypes(t *testing.T) {
+	tests := []struct {
+		name      string
+		resolver  *fakeEnvRoleResolver
+		roles     []client.InviteEnvRole
+		wantTypes []string // expected RoleType per role, in order
+	}{
+		{
+			name:      "privilege-group role (not found) keeps empty role_type",
+			resolver:  &fakeEnvRoleResolver{},
+			roles:     []client.InviteEnvRole{{EnvironmentType: "dev", Name: "Admin"}},
+			wantTypes: []string{""},
+		},
+		{
+			name:      "environment role gets role_type=environment",
+			resolver:  &fakeEnvRoleResolver{envRoleNames: map[string]bool{"Deployer": true}},
+			roles:     []client.InviteEnvRole{{EnvironmentType: "prod", Name: "Deployer"}},
+			wantTypes: []string{roleTypeEnvironment},
+		},
+		{
+			name:     "mixed: env role tagged, privilege group left default",
+			resolver: &fakeEnvRoleResolver{envRoleNames: map[string]bool{"Deployer": true}},
+			roles: []client.InviteEnvRole{
+				{EnvironmentType: "dev", Name: "Admin"},
+				{EnvironmentType: "prod", Name: "Deployer"},
+			},
+			wantTypes: []string{"", roleTypeEnvironment},
+		},
+		{
+			name:      "lookup error degrades to privilege_group default",
+			resolver:  &fakeEnvRoleResolver{errNames: map[string]bool{"Flaky": true}},
+			roles:     []client.InviteEnvRole{{EnvironmentType: "dev", Name: "Flaky"}},
+			wantTypes: []string{""},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resolveEnvRoleTypes(context.Background(), tt.resolver, tt.roles)
+			for i, want := range tt.wantTypes {
+				if tt.roles[i].RoleType != want {
+					t.Errorf("role[%d] (%s) RoleType = %q, want %q", i, tt.roles[i].Name, tt.roles[i].RoleType, want)
+				}
+			}
+		})
+	}
+}
+
+func TestResolveEnvRoleTypesDeduplicatesLookups(t *testing.T) {
+	resolver := &fakeEnvRoleResolver{envRoleNames: map[string]bool{"Deployer": true}}
+	roles := []client.InviteEnvRole{
+		{EnvironmentType: "dev", Name: "Deployer"},
+		{EnvironmentType: "test", Name: "Deployer"},
+		{EnvironmentType: "prod", Name: "Deployer"},
+	}
+
+	resolveEnvRoleTypes(context.Background(), resolver, roles)
+
+	for i := range roles {
+		if roles[i].RoleType != roleTypeEnvironment {
+			t.Errorf("role[%d] RoleType = %q, want %q", i, roles[i].RoleType, roleTypeEnvironment)
+		}
+	}
+	if got := resolver.calls["Deployer"]; got != 1 {
+		t.Errorf("GetEnvironmentRoleByName called %d times for %q, want 1 (deduplicated)", got, "Deployer")
 	}
 }

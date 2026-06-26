@@ -73,7 +73,7 @@ func (d *Connector) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error)
 				"dev_role": {
 					DisplayName: "Development Role",
 					Required:    false,
-					Description: "Workato role NAME to assign in the Development environment, e.g. \"Admin\", \"Operator\" or \"Analyst\".",
+					Description: "Workato role NAME for the Development environment — privilege-group (e.g. \"Admin\") or environment role; type detected automatically.",
 					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
 						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
 					},
@@ -83,7 +83,7 @@ func (d *Connector) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error)
 				"test_role": {
 					DisplayName: "Test Role",
 					Required:    false,
-					Description: "Workato role NAME to assign in the Test environment, e.g. \"Admin\", \"Operator\" or \"Analyst\".",
+					Description: "Workato role NAME for the Test environment — privilege-group (e.g. \"Operator\") or environment role; type detected automatically.",
 					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
 						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
 					},
@@ -93,7 +93,7 @@ func (d *Connector) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error)
 				"prod_role": {
 					DisplayName: "Production Role",
 					Required:    false,
-					Description: "Workato role NAME to assign in the Production environment, e.g. \"Admin\", \"Operator\" or \"Analyst\".",
+					Description: "Workato role NAME for the Production environment — privilege-group (e.g. \"Analyst\") or environment role; type detected automatically.",
 					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
 						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
 					},
