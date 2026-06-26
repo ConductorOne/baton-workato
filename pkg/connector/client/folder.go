@@ -10,12 +10,12 @@ import (
 
 // GetFolders returns a paginated list of folders, optionally filtered by parent folder.
 // GET /api/folders — https://docs.workato.com/workato-api/folders.html
-// Uses 0-based page pagination parameter.
+// Uses 1-based page pagination parameter (Workato's documented default is 1).
 // Required permission: Manage team members (API key scope).
 func (c *WorkatoClient) GetFolders(ctx context.Context, parentId *int, pToken string) ([]*Folder, string, annotations.Annotations, error) {
 	var response []*Folder
 
-	page, err := parsePageToken(pToken, 0)
+	page, err := parsePageToken(pToken, 1)
 	if err != nil {
 		return nil, "", nil, err
 	}
@@ -23,6 +23,7 @@ func (c *WorkatoClient) GetFolders(ctx context.Context, parentId *int, pToken st
 	uri := c.getPath(foldersPath)
 	query := uri.Query()
 	query.Add("page", fmt.Sprintf("%d", page))
+	query.Add("per_page", fmt.Sprintf("%d", defaultPageSize))
 	if parentId != nil {
 		query.Add("parent_id", fmt.Sprintf("%d", *parentId))
 	}
@@ -33,5 +34,5 @@ func (c *WorkatoClient) GetFolders(ctx context.Context, parentId *int, pToken st
 		return nil, "", annos, err
 	}
 
-	return response, nextToken(response, page), annos, nil
+	return response, nextToken(response, page, defaultPageSize), annos, nil
 }

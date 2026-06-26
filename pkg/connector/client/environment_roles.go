@@ -59,7 +59,7 @@ func (c *WorkatoClient) GetEnvironmentRoles(ctx context.Context, pToken string) 
 	uri := c.getPath(environmentRolesPath)
 	query := uri.Query()
 	query.Add("page[number]", strconv.Itoa(page))
-	query.Add("page[size]", "100")
+	query.Add("page[size]", strconv.Itoa(defaultPageSize))
 	uri.RawQuery = query.Encode()
 
 	annos, err := c.doRequest(ctx, http.MethodGet, uri, &response, nil)
@@ -67,5 +67,5 @@ func (c *WorkatoClient) GetEnvironmentRoles(ctx context.Context, pToken string) 
 		return nil, "", annos, err
 	}
 
-	return response.Data, nextToken(response.Data, page), annos, nil
+	return response.Data, nextToken(response.Data, page, defaultPageSize), annos, nil
 }

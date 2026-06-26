@@ -71,11 +71,26 @@ func (c *WorkatoClient) doRequest(ctx context.Context, method string, urlAddress
 	return annos, nil
 }
 
-func nextToken[T any](response []T, page int) string {
-	if len(response) == 0 {
+// defaultPageSize is the per_page value requested from Workato's list
+// endpoints. Workato's documented default and maximum are both 100.
+const defaultPageSize = 100
+
+// nextToken returns the pagination token for the next page, or "" when the
+// current page is the last one.
+//
+// A page is treated as the last one when it returns fewer items than perPage,
+// which covers both a partial final page and a fully empty page. This is
+// deliberately stricter than only stopping on an empty response: Workato does
+// not document what its list endpoints return for an out-of-range page, so if
+// the API clamps/repeats the last page (or ignores an unrecognized page value)
+// an empty-page-only terminator would paginate forever. Requesting per_page
+// explicitly and stopping on a short page makes termination depend on the
+// item count we control rather than undocumented out-of-range behavior.
+func nextToken[T any](response []T, page, perPage int) string {
+	if perPage <= 0 || len(response) < perPage {
 		return ""
 	}
-	return fmt.Sprintf("%d", page+1)
+	return strconv.Itoa(page + 1)
 }
 
 func parsePageToken(pToken string, defaultPage int) (int, error) {
