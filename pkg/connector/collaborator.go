@@ -197,6 +197,18 @@ func (o *collaboratorBuilder) collaboratorRoleGrants(ctx context.Context, sessio
 				// The list endpoint returns 200 with an empty list when the name does not match.
 				envRole, _, err = o.client.GetEnvironmentRoleByName(ctx, role.RoleName)
 				if err != nil {
+					if isEnvironmentRolesAccessDenied(err) {
+						// The API key cannot read environment roles (non-RBAC-v2 workspace
+						// or missing privilege). Skip this grant instead of failing the whole
+						// collaborator grant sync; the rest of the collaborator's grants
+						// (privileges, folders, custom roles) are unaffected.
+						l.Warn("baton-workato: cannot access environment roles, skipping environment role grant for collaborator",
+							zap.String("role_name", role.RoleName),
+							zap.String("environment_type", role.EnvironmentType),
+							zap.Error(err),
+						)
+						continue
+					}
 					return nil, fmt.Errorf("baton-workato: failed to get environment role %s: %w", role.RoleName, err)
 				}
 				if envRole == nil {

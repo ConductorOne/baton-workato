@@ -13,6 +13,8 @@ import (
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -33,6 +35,15 @@ func (o *environmentRoleBuilder) ResourceType(_ context.Context) *v2.ResourceTyp
 func (o *environmentRoleBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
 	roles, nextToken, annos, err := o.client.GetEnvironmentRoles(ctx, attr.PageToken.Token)
 	if err != nil {
+		if isEnvironmentRolesAccessDenied(err) {
+			// The API key cannot read environment roles (non-RBAC-v2 workspace or
+			// missing privilege). Skip this resource type instead of failing the
+			// whole sync; collaborators, folders, projects, and custom roles still sync.
+			ctxzap.Extract(ctx).Warn("baton-workato: cannot access environment roles, skipping environment role sync",
+				zap.Error(err),
+			)
+			return nil, &rs.SyncOpResults{Annotations: annos}, nil
+		}
 		return nil, &rs.SyncOpResults{Annotations: annos}, fmt.Errorf("baton-workato: failed to list environment roles: %w", err)
 	}
 
