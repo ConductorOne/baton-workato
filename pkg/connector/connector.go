@@ -28,17 +28,14 @@ type Connector struct {
 
 // ResourceSyncers returns a ResourceSyncer for each resource type that should be synced from the upstream service.
 func (d *Connector) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncerV2 {
-	syncers := []connectorbuilder.ResourceSyncerV2{
+	return []connectorbuilder.ResourceSyncerV2{
+		newEnvironmentRoleBuilder(d.client, d.env),
 		newCollaboratorBuilder(d.client, d.env, d.disableCustomRolesSync, d.syncEnvironmentRoles),
 		newPrivilegeBuilder(d.client),
 		newRoleBuilder(d.client, d.env, d.disableCustomRolesSync),
 		newFolderBuilder(d.client, d.disableCustomRolesSync),
 		newProjectBuilder(d.client),
 	}
-	if d.syncEnvironmentRoles {
-		syncers = append([]connectorbuilder.ResourceSyncerV2{newEnvironmentRoleBuilder(d.client, d.env)}, syncers...)
-	}
-	return syncers
 }
 
 // Asset takes an input AssetRef and attempts to fetch it using the connector's authenticated http client
