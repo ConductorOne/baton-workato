@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
@@ -24,7 +26,11 @@ const (
 	noAccessRoleName = "No access"
 )
 
-var _ connectorbuilder.ResourceSyncerV2 = (*collaboratorBuilder)(nil)
+var (
+	_ connectorbuilder.ResourceSyncerV2  = (*collaboratorBuilder)(nil)
+	_ connectorbuilder.AccountManagerV2  = (*collaboratorBuilder)(nil)
+	_ connectorbuilder.ResourceDeleterV2 = (*collaboratorBuilder)(nil)
+)
 
 type collaboratorBuilder struct {
 	client                 *client.WorkatoClient
@@ -274,6 +280,249 @@ func (o *collaboratorBuilder) collaboratorRoleGrants(ctx context.Context, sessio
 		rv = append(rv, newGrant)
 	}
 	return rv, nil
+}
+
+// CreateAccountCapabilityDetails declares the credential options for account
+// creation. Workato invitations are email-based and carry no password, so the
+// connector advertises the no-password option. Required for the SDK to detect
+// AccountManagerV2.
+func (o *collaboratorBuilder) CreateAccountCapabilityDetails(_ context.Context) (*v2.CredentialDetailsAccountProvisioning, annotations.Annotations, error) {
+	return &v2.CredentialDetailsAccountProvisioning{
+		SupportedCredentialOptions: []v2.CapabilityDetailCredentialOption{
+			v2.CapabilityDetailCredentialOption_CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD,
+		},
+		PreferredCredentialOption: v2.CapabilityDetailCredentialOption_CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD,
+	}, nil, nil
+}
+
+// CreateAccount invites a new collaborator to Workato.
+//
+// Flow:
+//  1. If a collaborator with the email already exists in the tenant, return
+//     AlreadyExistsResult (idempotent; the account-provisioning CI re-runs create).
+//  2. Otherwise POST /api/member_invitations to send an invitation email. If the
+//     email already belongs to a Workato user (AlreadyExists), fall back to
+//     POST /api/members to add the existing user to the team directly.
+//  3. Re-resolve the collaborator by email. If they are now a member, return
+//     SuccessResult. If the invitation is still pending email acceptance (no member
+//     row yet), return ActionRequiredResult with no Resource — never fabricate a
+//     resource keyed on the email, which could not reconcile with the real
+//     ID-keyed resource a later sync emits.
+func (o *collaboratorBuilder) CreateAccount(
+	ctx context.Context, accountInfo *v2.AccountInfo, _ *v2.LocalCredentialOptions,
+) (connectorbuilder.CreateAccountResponse, []*v2.PlaintextData, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+	profileMap := accountInfo.GetProfile().AsMap()
+
+	email := accountInfo.GetLogin()
+	if email == "" {
+		email, _ = profileMap["email"].(string)
+	}
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return nil, nil, nil, status.Errorf(codes.InvalidArgument, "baton-workato: create account: email is required")
+	}
+
+	name, _ := profileMap["name"].(string)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, nil, nil, status.Errorf(codes.InvalidArgument, "baton-workato: create account: name is required")
+	}
+
+	// Step 1: short-circuit if the collaborator already exists in this tenant.
+	if existing, err := o.client.GetCollaboratorByEmail(ctx, email); err == nil {
+		res, resErr := collaboratorResource(existing)
+		if resErr != nil {
+			return nil, nil, nil, fmt.Errorf("baton-workato: create account: build resource: %w", resErr)
+		}
+		l.Debug("collaborator already exists, returning AlreadyExistsResult", zap.String("email", email))
+		return &v2.CreateAccountResponse_AlreadyExistsResult{Resource: res}, nil, nil, nil
+	} else if !client.IsNotFoundError(err) {
+		return nil, nil, nil, fmt.Errorf("baton-workato: create account: failed to look up collaborator %s: %w", email, err)
+	}
+
+	// Step 2: build and send the invitation. Tag each role's role_type by resolving
+	// the name against the environment-roles catalog; unresolved names default to
+	// privilege_group on Workato's side.
+	inviteReq := buildInviteRequest(name, email, profileMap)
+
+	// Workato requires at least one environment role on every invitation — a user
+	// group does NOT satisfy it (verified against the live API: a group-only invite
+	// 400s with "role_name or env_roles is required" just like an empty one). Fail
+	// early with a clear message instead of round-tripping to that opaque 400.
+	if len(inviteReq.EnvRoles) == 0 {
+		return nil, nil, nil, status.Errorf(codes.InvalidArgument, "baton-workato: create account: at least one environment role (dev_role/test_role/prod_role) is required")
+	}
+
+	resolveEnvRoleTypes(ctx, o.client, inviteReq.EnvRoles)
+
+	err := o.client.InviteCollaborator(ctx, inviteReq)
+	switch {
+	case err == nil:
+		// invitation sent.
+	case client.IsAlreadyExistsError(err):
+		// Email already belongs to a Workato user outside this tenant: add them directly.
+		l.Debug("invite reported already-exists, adding existing Workato user to team", zap.String("email", email))
+		if addErr := o.client.AddExistingCollaborator(ctx, email); addErr != nil {
+			if client.IsAlreadyExistsError(addErr) {
+				// Already a member after all; fall through to resolution below.
+				break
+			}
+			return nil, nil, nil, fmt.Errorf("baton-workato: create account: failed to add existing collaborator %s: %w", email, addErr)
+		}
+	default:
+		return nil, nil, nil, fmt.Errorf("baton-workato: create account: failed to invite collaborator %s: %w", email, err)
+	}
+
+	// Step 3: resolve the resulting collaborator.
+	created, err := o.client.GetCollaboratorByEmail(ctx, email)
+	if err != nil {
+		if client.IsNotFoundError(err) {
+			// Invitation sent but not yet accepted — no stable member ID exists yet.
+			return &v2.CreateAccountResponse_ActionRequiredResult{
+				Message:               fmt.Sprintf("Invitation sent to %s. The collaborator must accept the email invitation to complete account creation.", email),
+				IsCreateAccountResult: true,
+			}, nil, nil, nil
+		}
+		return nil, nil, nil, fmt.Errorf("baton-workato: create account: failed to resolve collaborator %s: %w", email, err)
+	}
+
+	res, err := collaboratorResource(created)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("baton-workato: create account: build resource: %w", err)
+	}
+
+	return &v2.CreateAccountResponse_SuccessResult{
+		Resource:              res,
+		IsCreateAccountResult: true,
+	}, nil, nil, nil
+}
+
+// Delete removes a collaborator from Workato. Workato has no soft-disable, so this
+// is a hard delete. A not-found result (HTTP 404) is treated as success because the
+// platform retries deletes and the collaborator may already be gone.
+func (o *collaboratorBuilder) Delete(ctx context.Context, resourceID *v2.ResourceId, _ *v2.ResourceId) (annotations.Annotations, error) {
+	collaboratorID, err := strconv.Atoi(resourceID.Resource)
+	if err != nil {
+		return nil, fmt.Errorf("baton-workato: delete collaborator: invalid id %q: %w", resourceID.Resource, err)
+	}
+
+	err = o.client.DeleteCollaborator(ctx, collaboratorID)
+	if err != nil {
+		if client.IsNotFoundError(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("baton-workato: delete collaborator %d: %w", collaboratorID, err)
+	}
+
+	return nil, nil
+}
+
+// buildInviteRequest assembles the POST /api/member_invitations body from the
+// account-creation profile. env_roles is built from per-environment role-name
+// fields (dev_role/test_role/prod_role) and user_group_ids from a comma-separated
+// string of group ids. All are optional but Workato generally needs at least one
+// role to make the invite usable, matching the official Workato Team API and the
+// connector's own UpdateCollaboratorRoles shape.
+func buildInviteRequest(name, email string, profileMap map[string]interface{}) client.InviteCollaboratorRequest {
+	req := client.InviteCollaboratorRequest{
+		Name:  name,
+		Email: email,
+	}
+
+	envRoleFields := []struct {
+		key string
+		env string
+	}{
+		{"dev_role", "dev"},
+		{"test_role", "test"},
+		{"prod_role", "prod"},
+	}
+
+	for _, f := range envRoleFields {
+		roleName := optionalStringField(profileMap, f.key)
+		if roleName == "" {
+			continue
+		}
+		req.EnvRoles = append(req.EnvRoles, client.InviteEnvRole{
+			EnvironmentType: f.env,
+			Name:            roleName,
+		})
+	}
+
+	req.UserGroupIDs = optionalStringListField(profileMap, "user_group_ids")
+
+	return req
+}
+
+// environmentRoleResolver looks up an environment role by name. *client.WorkatoClient
+// satisfies it; tests use a fake. Kept narrow so resolveEnvRoleTypes is unit-testable
+// without a live API or the concrete client.
+type environmentRoleResolver interface {
+	GetEnvironmentRoleByName(ctx context.Context, name string) (*client.EnvironmentRole, annotations.Annotations, error)
+}
+
+// resolveEnvRoleTypes tags each invite role with its role_type. A role name that
+// resolves to an environment role gets RoleType "environment"; everything else is
+// left empty so Workato applies its "privilege_group" default. This brings the
+// invite path to parity with the grant flow (role.go vs environment_role.go), which
+// already distinguishes the two role types.
+//
+// Lookups are deduplicated by name and degrade gracefully: a lookup error is logged
+// and the role falls back to the privilege_group default (the connector's prior
+// behavior), so a transient environment_roles failure never breaks an otherwise
+// valid privilege-group invite.
+func resolveEnvRoleTypes(ctx context.Context, resolver environmentRoleResolver, roles []client.InviteEnvRole) {
+	l := ctxzap.Extract(ctx)
+	isEnvRole := make(map[string]bool, len(roles))
+
+	for i := range roles {
+		name := roles[i].Name
+
+		resolved, seen := isEnvRole[name]
+		if !seen {
+			envRole, _, err := resolver.GetEnvironmentRoleByName(ctx, name)
+			if err != nil {
+				l.Debug("baton-workato: create account: environment role lookup failed; defaulting to privilege_group",
+					zap.String("role_name", name), zap.Error(err))
+				isEnvRole[name] = false
+				continue
+			}
+			resolved = envRole != nil
+			isEnvRole[name] = resolved
+		}
+
+		if resolved {
+			roles[i].RoleType = roleTypeEnvironment
+		}
+	}
+}
+
+// optionalStringField returns a trimmed string profile field, or "" when absent.
+func optionalStringField(profileMap map[string]interface{}, key string) string {
+	raw, _ := profileMap[key].(string)
+	return strings.TrimSpace(raw)
+}
+
+// optionalStringListField parses a comma-separated string profile field into a
+// slice, trimming spaces and dropping empties. Returns a nil slice when the field
+// is absent or empty.
+func optionalStringListField(profileMap map[string]interface{}, key string) []string {
+	raw, _ := profileMap[key].(string)
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+
+	var values []string
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		values = append(values, part)
+	}
+	return values
 }
 
 func newCollaboratorBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) *collaboratorBuilder {

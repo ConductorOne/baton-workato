@@ -71,6 +71,34 @@ func (s *SimpleRole) Equals(other SimpleRole) bool {
 		s.RoleName == other.RoleName
 }
 
+// InviteEnvRole is a single per-environment role assignment in a member
+// invitation. Name is the role NAME (e.g. "Admin"/"Operator"/"Analyst"), not a
+// numeric id, matching the official Workato Team API. RoleType is "environment"
+// for environment-type roles; when empty Workato defaults it to "privilege_group".
+// https://docs.workato.com/workato-api/team.html#invite-a-collaborator
+type InviteEnvRole struct {
+	EnvironmentType string `json:"environment_type"`
+	Name            string `json:"name"`
+	RoleType        string `json:"role_type,omitempty"`
+}
+
+// InviteCollaboratorRequest is the body for POST /api/member_invitations. It sends
+// a Workato invitation email to a brand-new collaborator. env_roles is an array of
+// {environment_type, name} objects and user_group_ids is an array of string ids,
+// mirroring UpdateCollaboratorRoles and the official Workato Team API.
+type InviteCollaboratorRequest struct {
+	Name         string          `json:"name"`
+	Email        string          `json:"email"`
+	UserGroupIDs []string        `json:"user_group_ids,omitempty"`
+	EnvRoles     []InviteEnvRole `json:"env_roles,omitempty"`
+}
+
+// AddCollaboratorRequest is the body for POST /api/members. It adds an email that
+// already belongs to a Workato user directly to the team (no invitation email).
+type AddCollaboratorRequest struct {
+	Email string `json:"email"`
+}
+
 type Collaborator struct {
 	Id              int          `json:"id"`
 	GrantType       string       `json:"grant_type"`

@@ -8,6 +8,7 @@ type Workato struct {
 	WorkatoDataCenter string `mapstructure:"workato-data-center"`
 	WorkatoEnv string `mapstructure:"workato-env"`
 	DisableCustomRolesSync bool `mapstructure:"disable-custom-roles-sync"`
+	WorkatoBaseUrl string `mapstructure:"workato-base-url"`
 }
 
 func (c *Workato) findFieldByTag(tagValue string) (any, bool) {
