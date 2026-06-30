@@ -39,4 +39,5 @@ var environmentRoleResourceType = &v2.ResourceType{
 	Id:          "environment_role",
 	DisplayName: "Environment Role",
 	Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_ROLE},
+	Annotations: annotations.New(&v2.SkipGrants{}),
 }
