@@ -64,3 +64,31 @@ jobs:
         run: |
           ./baton-workato
           baton grants --entitlement="${{ vars.BATON_ENTITLEMENT_ENV_ROLE }}" --output-format=json | jq --exit-status ".grants[] | select(.principal.id.resource == \"${{ secrets.CONNECTOR_PRINCIPAL }}\")"
+
+  account-provisioning-test:
+    # Exercises sync + account provisioning (invite/create -> delete) against the
+    # in-process Workato mock in cmd/test-server, so it needs no real tenant.
+    runs-on: ubuntu-latest
+    env:
+      BATON_LOG_LEVEL: debug
+      BATON_WORKATO_API_KEY: test-token
+      BATON_WORKATO_BASE_URL: http://localhost:8765
+      BATON_WORKATO_ENV: all
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/start-test-server
+      - name: Run sync
+        run: ./baton-workato
+      - name: Account provisioning (create/delete)
+        uses: ConductorOne/github-workflows/actions/account-provisioning@v4
+        with:
+          connector: ./baton-workato
+          account-email: newhire@example.com
+          account-login: newhire@example.com
+          account-profile: '{"name":"New Hire","email":"newhire@example.com","dev_role":"Admin"}'
+          account-type: collaborator
+          search-method: email
+      - name: Stop test server
+        if: always()
+        run: pkill -f test-server || true
