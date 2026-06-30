@@ -34,7 +34,7 @@ jobs:
       - name: Sync and verify grant
         run: |
           ./baton-workato
-          baton grants --entitlement="role:Operator:collaborator-has" | grep "${{ secrets.CONNECTOR_PRINCIPAL }}"
+          baton grants --entitlement="role:Operator:collaborator-has" | grep -w "${{ secrets.CONNECTOR_PRINCIPAL }}"
 
   test-grant-environment-role:
     runs-on: ubuntu-latest
@@ -63,4 +63,4 @@ jobs:
       - name: Sync and verify grant
         run: |
           ./baton-workato
-          baton grants --entitlement="${{ vars.BATON_ENTITLEMENT_ENV_ROLE }}" | grep "${{ secrets.CONNECTOR_PRINCIPAL }}"
+          baton grants --entitlement="${{ vars.BATON_ENTITLEMENT_ENV_ROLE }}" | grep -w "${{ secrets.CONNECTOR_PRINCIPAL }}"
