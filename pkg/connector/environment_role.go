@@ -19,7 +19,6 @@ import (
 
 var _ connectorbuilder.ResourceSyncerV2 = (*environmentRoleBuilder)(nil)
 var _ connectorbuilder.ResourceProvisionerV2Limited = (*environmentRoleBuilder)(nil)
-var _ connectorbuilder.StaticEntitlementSyncerV2 = (*environmentRoleBuilder)(nil)
 
 type environmentRoleBuilder struct {
 	client *client.WorkatoClient
@@ -56,19 +55,23 @@ func (o *environmentRoleBuilder) List(ctx context.Context, _ *v2.ResourceId, att
 	return rv, &rs.SyncOpResults{NextPageToken: nextToken, Annotations: annos}, nil
 }
 
-func (o *environmentRoleBuilder) Entitlements(_ context.Context, _ *v2.Resource, _ rs.SyncOpAttrs) ([]*v2.Entitlement, *rs.SyncOpResults, error) {
-	return nil, nil, nil
-}
+func (o *environmentRoleBuilder) Entitlements(_ context.Context, res *v2.Resource, _ rs.SyncOpAttrs) ([]*v2.Entitlement, *rs.SyncOpResults, error) {
+	_, envType, err := parseRoleResourceID(res.Id.Resource, o.env)
+	if err != nil {
+		return nil, nil, fmt.Errorf("baton-workato: failed to parse environment role resource ID: %w", err)
+	}
 
-func (o *environmentRoleBuilder) StaticEntitlements(_ context.Context, _ rs.SyncOpAttrs) ([]*v2.Entitlement, *rs.SyncOpResults, error) {
+	exclusionGroupID := fmt.Sprintf("env-role-%s", envType.String())
+
 	return []*v2.Entitlement{
 		entitlement.NewAssignmentEntitlement(
-			nil,
+			res,
 			collaboratorHasRoleEntitlement,
 			entitlement.WithGrantableTo(collaboratorResourceType),
 			entitlement.WithDisplayName("Has environment role"),
 			entitlement.WithDescription("Collaborator is assigned this environment role"),
 			entitlement.WithAnnotation(&v2.EntitlementImmutable{}),
+			entitlement.WithExclusionGroup(exclusionGroupID),
 		),
 	}, nil, nil
 }
