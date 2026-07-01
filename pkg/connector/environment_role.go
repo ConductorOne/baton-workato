@@ -61,6 +61,11 @@ func (o *environmentRoleBuilder) Entitlements(_ context.Context, res *v2.Resourc
 		return nil, nil, fmt.Errorf("baton-workato: failed to parse environment role resource ID: %w", err)
 	}
 
+	// Known limitation: baton-sdk caps exclusion groups at 50 entitlements per group ID
+	// (maxEntitlementsPerExclusionGroup in sync/syncer.go). This bucket is keyed per
+	// environment type, so every environment role for a given environment shares it.
+	// Workato allows unlimited custom environment roles, so having more than 50 roles
+	// in a single environment will cause sync to fail.
 	exclusionGroupID := fmt.Sprintf("env-role-%s", envType.String())
 
 	return []*v2.Entitlement{
