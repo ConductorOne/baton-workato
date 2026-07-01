@@ -37,6 +37,7 @@ type collaboratorBuilder struct {
 	cache                  *collaboratorCache
 	env                    workato.Environment
 	disableCustomRolesSync bool
+	syncEnvironmentRoles   bool
 }
 
 func (o *collaboratorBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
@@ -195,6 +196,9 @@ func (o *collaboratorBuilder) collaboratorRoleGrants(ctx context.Context, sessio
 
 		switch role.RoleType {
 		case roleTypeEnvironment:
+			if !o.syncEnvironmentRoles {
+				continue
+			}
 			envRole, err := getEnvironmentRoleByName(ctx, session, role.RoleName)
 			if err != nil {
 				return nil, err
@@ -525,12 +529,13 @@ func optionalStringListField(profileMap map[string]interface{}, key string) []st
 	return values
 }
 
-func newCollaboratorBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) *collaboratorBuilder {
+func newCollaboratorBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool, syncEnvironmentRoles bool) *collaboratorBuilder {
 	return &collaboratorBuilder{
 		client:                 client,
 		cache:                  newCollaboratorCache(client),
 		env:                    env,
 		disableCustomRolesSync: disableCustomRolesSync,
+		syncEnvironmentRoles:   syncEnvironmentRoles,
 	}
 }
 

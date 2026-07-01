@@ -23,15 +23,16 @@ type Connector struct {
 	client                 *client.WorkatoClient
 	env                    workato.Environment
 	disableCustomRolesSync bool
+	syncEnvironmentRoles   bool
 }
 
 // ResourceSyncers returns a ResourceSyncer for each resource type that should be synced from the upstream service.
 func (d *Connector) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncerV2 {
 	return []connectorbuilder.ResourceSyncerV2{
-		newCollaboratorBuilder(d.client, d.env, d.disableCustomRolesSync),
+		newEnvironmentRoleBuilder(d.client, d.env),
+		newCollaboratorBuilder(d.client, d.env, d.disableCustomRolesSync, d.syncEnvironmentRoles),
 		newPrivilegeBuilder(d.client),
 		newRoleBuilder(d.client, d.env, d.disableCustomRolesSync),
-		newEnvironmentRoleBuilder(d.client, d.env),
 		newFolderBuilder(d.client, d.disableCustomRolesSync),
 		newProjectBuilder(d.client),
 	}
@@ -126,16 +127,17 @@ func (d *Connector) Validate(ctx context.Context) (annotations.Annotations, erro
 }
 
 // New returns a new instance of the connector.
-func NewConnector(ctx context.Context, workatoClient *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool) (*Connector, error) {
+func NewConnector(ctx context.Context, workatoClient *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool, syncEnvironmentRoles bool) (*Connector, error) {
 	return &Connector{
 		client:                 workatoClient,
 		env:                    env,
 		disableCustomRolesSync: disableCustomRolesSync,
+		syncEnvironmentRoles:   syncEnvironmentRoles,
 	}, nil
 }
 
 // New returns the Workato connector configured to sync against the instance URL.
-func New(ctx context.Context, config *cfg.Workato, _ *cli.ConnectorOpts) (connectorbuilder.ConnectorBuilderV2, []connectorbuilder.Opt, error) {
+func New(ctx context.Context, config *cfg.Workato, connectorOpts *cli.ConnectorOpts) (connectorbuilder.ConnectorBuilderV2, []connectorbuilder.Opt, error) {
 	l := ctxzap.Extract(ctx)
 	err := field.Validate(cfg.Config, config)
 	if err != nil {
@@ -159,7 +161,8 @@ func New(ctx context.Context, config *cfg.Workato, _ *cli.ConnectorOpts) (connec
 		return nil, nil, err
 	}
 
-	cb, err := NewConnector(ctx, workatoClient, env, config.DisableCustomRolesSync)
+	syncEnvRoles := connectorOpts != nil && connectorOpts.WillSyncResourceType(environmentRoleResourceType.Id)
+	cb, err := NewConnector(ctx, workatoClient, env, config.DisableCustomRolesSync, syncEnvRoles)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))
 		return nil, nil, err

@@ -44,6 +44,12 @@ func (o *roleBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOp
 	if !o.disableCustomRolesSync {
 		roles, nextToken, annos, err := o.client.GetRoles(ctx, attr.PageToken.Token)
 		if err != nil {
+			if code := status.Code(err); code == codes.Unauthenticated || code == codes.PermissionDenied {
+				return nil, &rs.SyncOpResults{Annotations: annos}, fmt.Errorf(
+					"baton-workato: API client is not authorized to list legacy custom roles. "+
+						"Grant the 'List non-system roles' privilege to the API client in Workato, "+
+						"or set --disable-custom-roles-sync=true to skip legacy custom role sync and continue with base roles only, and environment roles if enabled: %w", err)
+			}
 			return nil, &rs.SyncOpResults{Annotations: annos}, err
 		}
 

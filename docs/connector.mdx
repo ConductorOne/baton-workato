@@ -43,7 +43,7 @@ Select the following endpoints:
     |              | Collaborators        | Add existing collaborator   | `POST /api/members`                |
     |              | Collaborators        | Remove collaborator         | `DELETE /api/members/:id`          |
     |              | Collaborators        | Get collaborator privileges | `GET /api/members/:id/privileges`  |
-    |              | Collaborator roles   | List non-system roles       | `GET /api/roles`                   |
+    |              | Collaborator roles   | List non-system roles§      | `GET /api/roles`                   |
     |              | Environment roles    | List environment roles†     | `GET /api/environment_roles`       |
     |              | Environment roles    | Get environment role†‡      | `GET /api/environment_roles/:id`   |
     *If you don’t want to use C1 to provision role assignments, you can skip **Update collaborator’s roles** and **Get environment role**.
@@ -51,6 +51,8 @@ Select the following endpoints:
     †**List environment roles** and **Get environment role** are only available in workspaces that use the new RBAC v2 model (environment roles). If your workspace uses the legacy role model, these permissions do not appear in the UI and you can skip them.
 
     ‡**Get environment role** is required only if you want C1 to provision environment role assignments.
+
+    §**The Collaborator roles section** (including **List non-system roles**) only appears in the UI if your workspace uses the legacy roles model. If this section is not visible, your workspace has migrated to the new RBAC v2 model and legacy custom roles are no longer accessible via the API. In that case, migrate your legacy custom roles to environment roles using the [Role migration API](https://docs.workato.com/workato-api/role-migration.html), or enable **Disable custom roles sync** to skip legacy custom role sync.
 </Step>
 <Step>
 Save the new role.  
@@ -232,7 +234,8 @@ stringData:
   BATON_WORKATO_DATA_CENTER: <Your Workato data center (one of us, eu, jp, sg, or au). Default is us.>
   BATON_WORKATO_ENV: <Your Workato environment (one of dev, test, or prod). Default is 'dev'>
 
-  # Optional: include if you don't want to sync custom Workato roles
+  # Optional: set to true to skip legacy custom role sync (required if your workspace
+  # has migrated to RBAC v2 and the 'Collaborator roles' section does not appear in the API client UI)
   BATON_DISABLE_CUSTOM_ROLES_SYNC: true
 
   # Optional: include if you want C1 to provision access using this connector
