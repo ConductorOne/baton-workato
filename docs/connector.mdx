@@ -292,3 +292,22 @@ Check that the connector data uploaded correctly. In C1, click **Apps**. On the 
 
 </Tab>
 </Tabs>
+
+## Provision accounts
+
+When you use C1 to provision access in Workato, C1 creates the collaborator by sending a Workato member invitation. The invited person receives an email and becomes a full member once they accept it.
+
+### Required attributes
+
+Configure the account-provisioning attribute mapping in C1 with at least these attributes:
+
+| Attribute | Required | Notes |
+| :--- | :--- | :--- |
+| `email` | Yes | The collaborator's email address. |
+| `name` | Yes | The collaborator's full name. |
+| `dev_role` / `test_role` / `prod_role` | At least one | The environment role to assign, per environment. Workato requires at least one environment role on every invitation — a user group alone is not sufficient. |
+| `user_group_ids` | No | Comma-separated Workato user group IDs. |
+
+<Note>
+The environment role you map must target an environment that **exists in your Workato workspace**. Workspaces may have only a subset of environments (for example, only **dev**). Mapping a role for an environment your workspace does not have causes the invitation to fail with `Environment <env> not found`. Use the role field (`dev_role`, `test_role`, or `prod_role`) that matches an environment your workspace actually has.
+</Note>
