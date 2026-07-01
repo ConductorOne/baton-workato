@@ -10,6 +10,73 @@ import (
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 )
 
+// TestResolveInviteEmail is the repro test for CXH-1958.
+// Before the fix, GetLogin() was used first and profileMap["email"] was only a
+// fallback for an empty login — so a handle login (non-email) would be sent
+// verbatim to Workato's invite API, which rejects it with "400 Email is invalid".
+func TestResolveInviteEmail(t *testing.T) {
+	tests := []struct {
+		name           string
+		login          string
+		emailAddresses []string
+		profileMap     map[string]interface{}
+		want           string
+	}{
+		{
+			// Repro: C1 login is a handle (not an email). Mapped profile email must win.
+			name:       "handle login + mapped email → mapped email wins",
+			login:      "carolinaroncaglia",
+			profileMap: map[string]interface{}{"email": "carolina@example.com"},
+			want:       "carolina@example.com",
+		},
+		{
+			// Mapped email preferred even when login is email-shaped.
+			name:       "mapped email preferred over email-shaped login",
+			login:      "user@example.com",
+			profileMap: map[string]interface{}{"email": "mapped@example.com"},
+			want:       "mapped@example.com",
+		},
+		{
+			// Login is email-shaped and no profile email present → use login.
+			name:       "email-shaped login, no mapped email → login used",
+			login:      "user@example.com",
+			profileMap: map[string]interface{}{},
+			want:       "user@example.com",
+		},
+		{
+			// Handle login, no mapped email, but GetEmails populated → use first address.
+			name:           "handle login + GetEmails fallback",
+			login:          "handle",
+			profileMap:     map[string]interface{}{},
+			emailAddresses: []string{"handle@company.com"},
+			want:           "handle@company.com",
+		},
+		{
+			// Nothing available → empty string; caller returns an error.
+			name:       "all sources empty → empty string",
+			login:      "",
+			profileMap: map[string]interface{}{},
+			want:       "",
+		},
+		{
+			// Whitespace-only login is not email-shaped.
+			name:       "whitespace-only login + no mapped email → empty",
+			login:      "   ",
+			profileMap: map[string]interface{}{},
+			want:       "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveInviteEmail(tt.login, tt.emailAddresses, tt.profileMap)
+			if got != tt.want {
+				t.Errorf("resolveInviteEmail() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestOptionalStringListField(t *testing.T) {
 	tests := []struct {
 		name     string

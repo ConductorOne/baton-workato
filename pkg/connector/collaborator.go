@@ -318,11 +318,12 @@ func (o *collaboratorBuilder) CreateAccount(
 	l := ctxzap.Extract(ctx)
 	profileMap := accountInfo.GetProfile().AsMap()
 
-	email := accountInfo.GetLogin()
-	if email == "" {
-		email, _ = profileMap["email"].(string)
+	var emailAddresses []string
+	for _, e := range accountInfo.GetEmails() {
+		emailAddresses = append(emailAddresses, e.GetAddress())
 	}
-	email = strings.TrimSpace(email)
+
+	email := resolveInviteEmail(accountInfo.GetLogin(), emailAddresses, profileMap)
 	if email == "" {
 		return nil, nil, nil, status.Errorf(codes.InvalidArgument, "baton-workato: create account: email is required")
 	}
@@ -527,6 +528,38 @@ func optionalStringListField(profileMap map[string]interface{}, key string) []st
 		values = append(values, part)
 	}
 	return values
+}
+
+// resolveInviteEmail picks the best email address to use for a Workato
+// invitation. It prefers the explicitly-mapped "email" profile field (which C1
+// populates from the directory user's real email), then falls back to the login
+// only when it is email-shaped, and lastly to the first address from GetEmails().
+// This avoids sending a bare username handle to Workato's invite API, which
+// rejects non-email values with "400 Email is invalid".
+func resolveInviteEmail(login string, emailAddresses []string, profileMap map[string]interface{}) string {
+	// Prefer the explicitly-mapped profile field.
+	if mapped := strings.TrimSpace(optionalStringField(profileMap, "email")); mapped != "" {
+		return mapped
+	}
+	// Use login only when it looks like an email address.
+	if trimmed := strings.TrimSpace(login); isEmailShaped(trimmed) {
+		return trimmed
+	}
+	// Last resort: first non-empty address from accountInfo.GetEmails().
+	for _, addr := range emailAddresses {
+		if addr = strings.TrimSpace(addr); addr != "" {
+			return addr
+		}
+	}
+	return ""
+}
+
+// isEmailShaped returns true when s contains a non-empty local part, an "@",
+// and a non-empty domain part. It is intentionally lenient — the goal is only
+// to distinguish bare username handles (no "@") from plausible email strings.
+func isEmailShaped(s string) bool {
+	at := strings.LastIndex(s, "@")
+	return at > 0 && at < len(s)-1
 }
 
 func newCollaboratorBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool, syncEnvironmentRoles bool) *collaboratorBuilder {
