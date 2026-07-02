@@ -318,12 +318,7 @@ func (o *collaboratorBuilder) CreateAccount(
 	l := ctxzap.Extract(ctx)
 	profileMap := accountInfo.GetProfile().AsMap()
 
-	var emailAddresses []string
-	for _, e := range accountInfo.GetEmails() {
-		emailAddresses = append(emailAddresses, e.GetAddress())
-	}
-
-	email := resolveInviteEmail(accountInfo.GetLogin(), emailAddresses, profileMap)
+	email := resolveInviteEmail(accountInfo.GetLogin(), accountInfo.GetEmails(), profileMap)
 	if email == "" {
 		return nil, nil, nil, status.Errorf(codes.InvalidArgument, "baton-workato: create account: email is required")
 	}
@@ -552,10 +547,11 @@ func optionalStringListField(profileMap map[string]interface{}, key string) []st
 // resolveInviteEmail picks the best email address to use for a Workato
 // invitation. It prefers the explicitly-mapped "email" profile field (which C1
 // populates from the directory user's real email), then falls back to the login
-// only when it is email-shaped, and lastly to the first address from GetEmails().
-// This avoids sending a bare username handle to Workato's invite API, which
-// rejects non-email values with "400 Email is invalid".
-func resolveInviteEmail(login string, emailAddresses []string, profileMap map[string]interface{}) string {
+// only when it is email-shaped, and lastly to the addresses from GetEmails() —
+// preferring the primary (IsPrimary == true) entry when present, otherwise the
+// first non-empty address. This avoids sending a bare username handle to
+// Workato's invite API, which rejects non-email values with "400 Email is invalid".
+func resolveInviteEmail(login string, emails []*v2.AccountInfo_Email, profileMap map[string]interface{}) string {
 	// Prefer the explicitly-mapped profile field.
 	if mapped := strings.TrimSpace(optionalStringField(profileMap, "email")); mapped != "" {
 		return mapped
@@ -564,13 +560,21 @@ func resolveInviteEmail(login string, emailAddresses []string, profileMap map[st
 	if trimmed := strings.TrimSpace(login); isEmailShaped(trimmed) {
 		return trimmed
 	}
-	// Last resort: first non-empty address from accountInfo.GetEmails().
-	for _, addr := range emailAddresses {
-		if addr = strings.TrimSpace(addr); addr != "" {
+	// Last resort: prefer primary email from GetEmails(), fall back to first non-empty.
+	var first string
+	for _, e := range emails {
+		addr := strings.TrimSpace(e.GetAddress())
+		if addr == "" {
+			continue
+		}
+		if e.GetIsPrimary() {
 			return addr
 		}
+		if first == "" {
+			first = addr
+		}
 	}
-	return ""
+	return first
 }
 
 // isEmailShaped returns true when s contains a non-empty local part, an "@",

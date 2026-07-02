@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 )
@@ -16,11 +17,11 @@ import (
 // verbatim to Workato's invite API, which rejects it with "400 Email is invalid".
 func TestResolveInviteEmail(t *testing.T) {
 	tests := []struct {
-		name           string
-		login          string
-		emailAddresses []string
-		profileMap     map[string]interface{}
-		want           string
+		name       string
+		login      string
+		emails     []*v2.AccountInfo_Email
+		profileMap map[string]interface{}
+		want       string
 	}{
 		{
 			// Repro: C1 login is a handle (not an email). Mapped profile email must win.
@@ -45,11 +46,23 @@ func TestResolveInviteEmail(t *testing.T) {
 		},
 		{
 			// Handle login, no mapped email, but GetEmails populated → use first address.
-			name:           "handle login + GetEmails fallback",
-			login:          "handle",
-			profileMap:     map[string]interface{}{},
-			emailAddresses: []string{"handle@company.com"},
-			want:           "handle@company.com",
+			name:       "handle login + GetEmails fallback",
+			login:      "handle",
+			profileMap: map[string]interface{}{},
+			emails:     []*v2.AccountInfo_Email{{Address: "handle@company.com"}},
+			want:       "handle@company.com",
+		},
+		{
+			// Multiple emails where primary is not first — primary must be chosen.
+			name:       "multiple emails, primary not first -> primary chosen",
+			login:      "handle",
+			profileMap: map[string]interface{}{},
+			emails: []*v2.AccountInfo_Email{
+				{Address: "first@example.com", IsPrimary: false},
+				{Address: "primary@example.com", IsPrimary: true},
+				{Address: "second@example.com", IsPrimary: false},
+			},
+			want: "primary@example.com",
 		},
 		{
 			// Nothing available → empty string; caller returns an error.
@@ -69,7 +82,7 @@ func TestResolveInviteEmail(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := resolveInviteEmail(tt.login, tt.emailAddresses, tt.profileMap)
+			got := resolveInviteEmail(tt.login, tt.emails, tt.profileMap)
 			if got != tt.want {
 				t.Errorf("resolveInviteEmail() = %q, want %q", got, tt.want)
 			}
