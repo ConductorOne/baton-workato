@@ -84,6 +84,7 @@ func TestOptionalStringListField(t *testing.T) {
 		key      string
 		expected []string
 	}{
+		// string (comma-separated) wire format
 		{"absent key", map[string]interface{}{}, "user_group_ids", nil},
 		{"empty string", map[string]interface{}{"user_group_ids": ""}, "user_group_ids", nil},
 		{"whitespace only", map[string]interface{}{"user_group_ids": "   "}, "user_group_ids", nil},
@@ -91,6 +92,12 @@ func TestOptionalStringListField(t *testing.T) {
 		{"single value", map[string]interface{}{"user_group_ids": "g1"}, "user_group_ids", []string{"g1"}},
 		{"comma-separated with spaces", map[string]interface{}{"user_group_ids": " g1 , g2 ,g3"}, "user_group_ids", []string{"g1", "g2", "g3"}},
 		{"empty entries skipped", map[string]interface{}{"user_group_ids": "g1,,, g2 ,"}, "user_group_ids", []string{"g1", "g2"}},
+		// []interface{} wire format — produced by structpb.Struct.AsMap() for StringListField values
+		{"native list", map[string]interface{}{"env_roles": []interface{}{"dev:Admin", "prod:Analyst"}}, "env_roles", []string{"dev:Admin", "prod:Analyst"}},
+		{"native list with blank entry", map[string]interface{}{"env_roles": []interface{}{"", "dev:Admin"}}, "env_roles", []string{"dev:Admin"}},
+		{"native list with whitespace entry", map[string]interface{}{"env_roles": []interface{}{"  ", "dev:Admin"}}, "env_roles", []string{"dev:Admin"}},
+		{"native list non-string element skipped", map[string]interface{}{"env_roles": []interface{}{42, "dev:Admin"}}, "env_roles", []string{"dev:Admin"}},
+		{"native list all empty", map[string]interface{}{"env_roles": []interface{}{"", ""}}, "env_roles", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -111,20 +118,37 @@ func TestBuildInviteRequest(t *testing.T) {
 		expected client.InviteCollaboratorRequest
 	}{
 		{
-			name:     "minimal — no roles, no groups",
+			name:     "minimal — no env_roles field",
 			inName:   "New Hire",
 			email:    "new@example.com",
 			profile:  map[string]interface{}{},
 			expected: client.InviteCollaboratorRequest{Name: "New Hire", Email: "new@example.com"},
 		},
 		{
-			name:    "all three env roles in dev/test/prod order",
-			inName:  "Admin User",
-			email:   "admin@example.com",
-			profile: map[string]interface{}{"dev_role": "Admin", "test_role": "Operator", "prod_role": "Analyst"},
+			// Native list format: structpb.Struct.AsMap() produces []interface{} for StringListField.
+			name:   "single entry dev:Admin via native list",
+			inName: "Admin User",
+			email:  "admin@example.com",
+			profile: map[string]interface{}{
+				"env_roles": []interface{}{"dev:Admin"},
+			},
 			expected: client.InviteCollaboratorRequest{
-				Name:  "Admin User",
-				Email: "admin@example.com",
+				Name:     "Admin User",
+				Email:    "admin@example.com",
+				EnvRoles: []client.InviteEnvRole{{EnvironmentType: "dev", Name: "Admin"}},
+			},
+		},
+		{
+			// Multiple entries covering all three environments.
+			name:   "multiple entries dev/test/prod via native list",
+			inName: "Full Access",
+			email:  "full@example.com",
+			profile: map[string]interface{}{
+				"env_roles": []interface{}{"dev:Admin", "test:Operator", "prod:Analyst"},
+			},
+			expected: client.InviteCollaboratorRequest{
+				Name:  "Full Access",
+				Email: "full@example.com",
 				EnvRoles: []client.InviteEnvRole{
 					{EnvironmentType: "dev", Name: "Admin"},
 					{EnvironmentType: "test", Name: "Operator"},
@@ -133,21 +157,52 @@ func TestBuildInviteRequest(t *testing.T) {
 			},
 		},
 		{
-			name:    "subset — only prod_role; empty roles skipped",
-			inName:  "Prod Only",
-			email:   "prod@example.com",
-			profile: map[string]interface{}{"dev_role": "", "prod_role": "Analyst"},
+			// Blank entry in the list is silently skipped.
+			name:   "blank entry skipped",
+			inName: "Blank Test",
+			email:  "blank@example.com",
+			profile: map[string]interface{}{
+				"env_roles": []interface{}{"", "dev:Admin"},
+			},
 			expected: client.InviteCollaboratorRequest{
-				Name:     "Prod Only",
-				Email:    "prod@example.com",
-				EnvRoles: []client.InviteEnvRole{{EnvironmentType: "prod", Name: "Analyst"}},
+				Name:     "Blank Test",
+				Email:    "blank@example.com",
+				EnvRoles: []client.InviteEnvRole{{EnvironmentType: "dev", Name: "Admin"}},
 			},
 		},
 		{
-			name:    "roles + user_group_ids together",
-			inName:  "Grouped",
-			email:   "grouped@example.com",
-			profile: map[string]interface{}{"dev_role": "Admin", "user_group_ids": " 10 , 20 "},
+			// Entry with no colon is silently skipped.
+			name:   "malformed entry (no colon) skipped",
+			inName: "Malformed Test",
+			email:  "malformed@example.com",
+			profile: map[string]interface{}{
+				"env_roles": []interface{}{"AdminNoColon", "dev:Admin"},
+			},
+			expected: client.InviteCollaboratorRequest{
+				Name:     "Malformed Test",
+				Email:    "malformed@example.com",
+				EnvRoles: []client.InviteEnvRole{{EnvironmentType: "dev", Name: "Admin"}},
+			},
+		},
+		{
+			// Unknown env prefix is silently skipped.
+			name:   "unknown env prefix skipped",
+			inName: "Unknown Env",
+			email:  "unknown@example.com",
+			profile: map[string]interface{}{
+				"env_roles": []interface{}{"staging:Admin"},
+			},
+			expected: client.InviteCollaboratorRequest{Name: "Unknown Env", Email: "unknown@example.com"},
+		},
+		{
+			// env_roles list + user_group_ids string together.
+			name:   "env_roles + user_group_ids",
+			inName: "Grouped",
+			email:  "grouped@example.com",
+			profile: map[string]interface{}{
+				"env_roles":     []interface{}{"dev:Admin"},
+				"user_group_ids": " 10 , 20 ",
+			},
 			expected: client.InviteCollaboratorRequest{
 				Name:         "Grouped",
 				Email:        "grouped@example.com",

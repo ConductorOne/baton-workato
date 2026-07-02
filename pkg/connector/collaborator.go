@@ -356,7 +356,7 @@ func (o *collaboratorBuilder) CreateAccount(
 	// 400s with "role_name or env_roles is required" just like an empty one). Fail
 	// early with a clear message instead of round-tripping to that opaque 400.
 	if len(inviteReq.EnvRoles) == 0 {
-		return nil, nil, nil, status.Errorf(codes.InvalidArgument, "baton-workato: create account: at least one environment role (dev_role/test_role/prod_role) is required")
+		return nil, nil, nil, status.Errorf(codes.InvalidArgument, "baton-workato: create account: at least one environment role is required (map env_roles as \"env:role\", e.g. \"dev:Admin\")")
 	}
 
 	resolveEnvRoleTypes(ctx, o.client, inviteReq.EnvRoles)
@@ -424,35 +424,34 @@ func (o *collaboratorBuilder) Delete(ctx context.Context, resourceID *v2.Resourc
 }
 
 // buildInviteRequest assembles the POST /api/member_invitations body from the
-// account-creation profile. env_roles is built from per-environment role-name
-// fields (dev_role/test_role/prod_role) and user_group_ids from a comma-separated
-// string of group ids. All are optional but Workato generally needs at least one
-// role to make the invite usable, matching the official Workato Team API and the
-// connector's own UpdateCollaboratorRoles shape.
+// account-creation profile. env_roles is a required list where each entry is in
+// "env:role" format (e.g. "dev:Admin", "prod:Analyst"). Allowed environment
+// prefixes are dev, test, and prod; entries with unknown prefixes or no colon
+// are silently skipped. user_group_ids is an optional comma-separated string of
+// group IDs. The shape reuses client.InviteEnvRole{EnvironmentType, Name}.
 func buildInviteRequest(name, email string, profileMap map[string]interface{}) client.InviteCollaboratorRequest {
 	req := client.InviteCollaboratorRequest{
 		Name:  name,
 		Email: email,
 	}
 
-	envRoleFields := []struct {
-		key string
-		env string
-	}{
-		{"dev_role", "dev"},
-		{"test_role", "test"},
-		{"prod_role", "prod"},
-	}
-
-	for _, f := range envRoleFields {
-		roleName := optionalStringField(profileMap, f.key)
+	for _, entry := range optionalStringListField(profileMap, "env_roles") {
+		parts := strings.SplitN(entry, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		envPart := strings.ToLower(strings.TrimSpace(parts[0]))
+		roleName := strings.TrimSpace(parts[1])
 		if roleName == "" {
 			continue
 		}
-		req.EnvRoles = append(req.EnvRoles, client.InviteEnvRole{
-			EnvironmentType: f.env,
-			Name:            roleName,
-		})
+		switch envPart {
+		case "dev", "test", "prod":
+			req.EnvRoles = append(req.EnvRoles, client.InviteEnvRole{
+				EnvironmentType: envPart,
+				Name:            roleName,
+			})
+		}
 	}
 
 	req.UserGroupIDs = optionalStringListField(profileMap, "user_group_ids")
@@ -509,25 +508,45 @@ func optionalStringField(profileMap map[string]interface{}, key string) string {
 	return strings.TrimSpace(raw)
 }
 
-// optionalStringListField parses a comma-separated string profile field into a
-// slice, trimming spaces and dropping empties. Returns a nil slice when the field
-// is absent or empty.
+// optionalStringListField parses a profile field into a slice, trimming spaces
+// and dropping empties. It handles two wire formats:
+//   - []interface{} — produced by structpb.Struct.AsMap() for StringListField
+//     values; each element is type-asserted to string.
+//   - string — comma-separated (used by user_group_ids and legacy callers).
+//
+// Returns a nil slice when the field is absent or empty.
 func optionalStringListField(profileMap map[string]interface{}, key string) []string {
-	raw, _ := profileMap[key].(string)
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
+	raw, ok := profileMap[key]
+	if !ok {
 		return nil
 	}
-
-	var values []string
-	for _, part := range strings.Split(raw, ",") {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
+	switch v := raw.(type) {
+	case []interface{}:
+		var values []string
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				if s = strings.TrimSpace(s); s != "" {
+					values = append(values, s)
+				}
+			}
 		}
-		values = append(values, part)
+		return values
+	case string:
+		v = strings.TrimSpace(v)
+		if v == "" {
+			return nil
+		}
+		var values []string
+		for _, part := range strings.Split(v, ",") {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				values = append(values, part)
+			}
+		}
+		return values
+	default:
+		return nil
 	}
-	return values
 }
 
 // resolveInviteEmail picks the best email address to use for a Workato
