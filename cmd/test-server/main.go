@@ -82,6 +82,8 @@ func run() error {
 	mux.HandleFunc("POST /api/members", auth(handleAddMember(state)))
 	// https://docs.workato.com/workato-api/team.html#invite-a-collaborator
 	mux.HandleFunc("POST /api/member_invitations", auth(handleInvite(state)))
+	// https://docs.workato.com/workato-api/team.html#get-a-collaborator
+	mux.HandleFunc("GET /api/members/{id}", auth(handleGetMember(state)))
 	// https://docs.workato.com/workato-api/team.html#list-collaborator-privileges
 	mux.HandleFunc("GET /api/members/{id}/privileges", auth(handlePrivileges(state)))
 	// https://docs.workato.com/workato-api/team.html#update-collaborator-roles
@@ -92,6 +94,10 @@ func run() error {
 	mux.HandleFunc("GET /api/roles", auth(handleRoles(state)))
 	// https://docs.workato.com/workato-api/environment-roles.html#list-environment-roles
 	mux.HandleFunc("GET /api/environment_roles", auth(handleEnvironmentRoles(state)))
+	// https://docs.workato.com/workato-api/environment-roles.html#get-environment-role-details
+	// The connector's environment-role Grant path resolves the role by id here
+	// before calling PUT /api/members/:id.
+	mux.HandleFunc("GET /api/environment_roles/{id}", auth(handleEnvironmentRoleByID(state)))
 	// https://docs.workato.com/workato-api/projects.html#list-projects
 	mux.HandleFunc("GET /api/projects", auth(handleProjects(state)))
 	// https://docs.workato.com/workato-api/folders.html#list-folders
@@ -198,13 +204,57 @@ func handleAddMember(s *State) http.HandlerFunc {
 
 func handlePrivileges(s *State) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if _, err := pathID(r); err != nil {
+		id, err := pathID(r)
+		if err != nil {
 			writeErr(w, http.StatusBadRequest, "invalid member id")
 			return
 		}
-		// Seeded/created members carry no per-collaborator privilege rows; the
-		// connector treats an empty list as "no privileges" and skips them.
-		writeJSON(w, http.StatusOK, commonPagination[CollaboratorPrivilege]{Data: []CollaboratorPrivilege{}, Total: 0})
+		// Rows are derived from the member's current roles (see rolePrivilegeSeed in
+		// state.go) so the connector's privilege-grant and folder-grant paths run
+		// against realistic data. Members with no roles (carol) still return an empty
+		// list, which the connector maps to NotFound and skips.
+		rows, ok := s.MemberPrivileges(id)
+		if !ok {
+			writeErr(w, http.StatusNotFound, "collaborator not found")
+			return
+		}
+		writeJSON(w, http.StatusOK, commonPagination[CollaboratorPrivilege]{Data: rows, Total: len(rows)})
+	}
+}
+
+func handleGetMember(s *State) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := pathID(r)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid member id")
+			return
+		}
+		m, ok := s.GetMember(id)
+		if !ok {
+			writeErr(w, http.StatusNotFound, "collaborator not found")
+			return
+		}
+		writeJSON(w, http.StatusOK, struct {
+			Data Collaborator `json:"data"`
+		}{Data: m})
+	}
+}
+
+func handleEnvironmentRoleByID(s *State) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := pathID(r)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid environment role id")
+			return
+		}
+		role, ok := s.EnvironmentRoleByID(id)
+		if !ok {
+			writeErr(w, http.StatusNotFound, "environment role not found")
+			return
+		}
+		writeJSON(w, http.StatusOK, struct {
+			Data EnvironmentRole `json:"data"`
+		}{Data: role})
 	}
 }
 

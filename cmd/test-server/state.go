@@ -211,7 +211,13 @@ func (s *State) DeleteMember(id int) bool {
 	return true
 }
 
-// UpdateMemberRoles replaces a member's roles. Returns false when it does not exist.
+// UpdateMemberRoles applies PUT /api/members/:id env_roles semantics: roles in the
+// environments named in the request are replaced; roles in environments not included
+// are unaffected. This mirrors the selective-update examples in
+// https://docs.workato.com/workato-api/team.html#update-collaborator-roles and the
+// connector's contract comment on UpdateCollaboratorRoles (pkg/connector/client/
+// colaborator.go). A full-set replacement here would hide cross-environment
+// regressions behind green tests. Returns false when the member does not exist.
 func (s *State) UpdateMemberRoles(id int, roles []SimpleRole) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -219,8 +225,81 @@ func (s *State) UpdateMemberRoles(id int, roles []SimpleRole) bool {
 	if !ok {
 		return false
 	}
-	m.Roles = roles
+	touched := make(map[string]bool, len(roles))
+	for _, r := range roles {
+		touched[r.EnvironmentType] = true
+	}
+	kept := slices.DeleteFunc(slices.Clone(m.Roles), func(r SimpleRole) bool { return touched[r.EnvironmentType] })
+	m.Roles = append(kept, roles...)
 	return true
+}
+
+// GetMember returns a copy of the member by id, mirroring GET /api/members/:id.
+func (s *State) GetMember(id int) (Collaborator, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m, ok := s.members[id]
+	if !ok {
+		return Collaborator{}, false
+	}
+	return *m, true
+}
+
+// EnvironmentRoleByID returns a copy of the environment role by id, mirroring
+// GET /api/environment_roles/:id — the lookup the connector's environment-role
+// Grant path performs before PUT /api/members/:id.
+func (s *State) EnvironmentRoleByID(id int) (EnvironmentRole, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, r := range s.environmentRoles {
+		if r.Id == id {
+			return r, true
+		}
+	}
+	return EnvironmentRole{}, false
+}
+
+// rolePrivilegeSeed maps a role name to the privilege matrix and folder scope that
+// GET /api/members/:id/privileges reports for a member holding that role. The live
+// response carries a folder_ids field per row that Workato's published docs omit
+// (verified 2026-07-06 against a developer-sandbox tenant); the connector builds
+// collaborator folder grants from it, so the mock must populate it to keep the
+// privilege-grant and folder-grant paths covered.
+var rolePrivilegeSeed = map[string]struct {
+	privileges map[string][]string
+	folderIDs  []int
+}{
+	"Admin":    {privileges: map[string][]string{"Recipes": {"read", "run"}, "Folders": {"read"}}, folderIDs: []int{10}},
+	"Operator": {privileges: map[string][]string{"Recipes": {"read"}, "Folders": {"read"}}, folderIDs: []int{11}},
+	"Deployer": {privileges: map[string][]string{"Recipes": {"read", "run"}}},
+	"Releaser": {privileges: map[string][]string{"Recipes": {"read"}}},
+}
+
+// MemberPrivileges derives the /privileges rows from the member's current roles,
+// one row per role, mirroring the live API's shape. Members with no roles produce
+// an empty list (the connector maps that to NotFound and skips privilege grants).
+// Returns false when the member does not exist.
+func (s *State) MemberPrivileges(id int) ([]CollaboratorPrivilege, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m, ok := s.members[id]
+	if !ok {
+		return nil, false
+	}
+	rows := make([]CollaboratorPrivilege, 0, len(m.Roles))
+	for _, r := range m.Roles {
+		seedRow, ok := rolePrivilegeSeed[r.RoleName]
+		if !ok {
+			continue
+		}
+		rows = append(rows, CollaboratorPrivilege{
+			EnvironmentType: r.EnvironmentType,
+			Name:            r.RoleName,
+			Privileges:      seedRow.privileges,
+			FolderIDs:       seedRow.folderIDs,
+		})
+	}
+	return rows, true
 }
 
 // Roles / Folders / Projects return copies of the seeded slices.
