@@ -6,9 +6,89 @@ import (
 	"reflect"
 	"testing"
 
+	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 )
+
+// TestResolveInviteEmail is the repro test for CXH-1958.
+// Before the fix, GetLogin() was used first and profileMap["email"] was only a
+// fallback for an empty login — so a handle login (non-email) would be sent
+// verbatim to Workato's invite API, which rejects it with "400 Email is invalid".
+func TestResolveInviteEmail(t *testing.T) {
+	tests := []struct {
+		name       string
+		login      string
+		emails     []*v2.AccountInfo_Email
+		profileMap map[string]interface{}
+		want       string
+	}{
+		{
+			// Repro: C1 login is a handle (not an email). Mapped profile email must win.
+			name:       "handle login + mapped email → mapped email wins",
+			login:      "carolinaroncaglia",
+			profileMap: map[string]interface{}{"email": "carolina@example.com"},
+			want:       "carolina@example.com",
+		},
+		{
+			// Mapped email preferred even when login is email-shaped.
+			name:       "mapped email preferred over email-shaped login",
+			login:      "user@example.com",
+			profileMap: map[string]interface{}{"email": "mapped@example.com"},
+			want:       "mapped@example.com",
+		},
+		{
+			// Login is email-shaped and no profile email present → use login.
+			name:       "email-shaped login, no mapped email → login used",
+			login:      "user@example.com",
+			profileMap: map[string]interface{}{},
+			want:       "user@example.com",
+		},
+		{
+			// Handle login, no mapped email, but GetEmails populated → use first address.
+			name:       "handle login + GetEmails fallback",
+			login:      "handle",
+			profileMap: map[string]interface{}{},
+			emails:     []*v2.AccountInfo_Email{{Address: "handle@company.com"}},
+			want:       "handle@company.com",
+		},
+		{
+			// Multiple emails where primary is not first — primary must be chosen.
+			name:       "multiple emails, primary not first -> primary chosen",
+			login:      "handle",
+			profileMap: map[string]interface{}{},
+			emails: []*v2.AccountInfo_Email{
+				{Address: "first@example.com", IsPrimary: false},
+				{Address: "primary@example.com", IsPrimary: true},
+				{Address: "second@example.com", IsPrimary: false},
+			},
+			want: "primary@example.com",
+		},
+		{
+			// Nothing available → empty string; caller returns an error.
+			name:       "all sources empty → empty string",
+			login:      "",
+			profileMap: map[string]interface{}{},
+			want:       "",
+		},
+		{
+			// Whitespace-only login is not email-shaped.
+			name:       "whitespace-only login + no mapped email → empty",
+			login:      "   ",
+			profileMap: map[string]interface{}{},
+			want:       "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveInviteEmail(tt.login, tt.emails, tt.profileMap)
+			if got != tt.want {
+				t.Errorf("resolveInviteEmail() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestOptionalStringListField(t *testing.T) {
 	tests := []struct {
@@ -17,6 +97,7 @@ func TestOptionalStringListField(t *testing.T) {
 		key      string
 		expected []string
 	}{
+		// string (comma-separated) wire format
 		{"absent key", map[string]interface{}{}, "user_group_ids", nil},
 		{"empty string", map[string]interface{}{"user_group_ids": ""}, "user_group_ids", nil},
 		{"whitespace only", map[string]interface{}{"user_group_ids": "   "}, "user_group_ids", nil},
@@ -24,6 +105,12 @@ func TestOptionalStringListField(t *testing.T) {
 		{"single value", map[string]interface{}{"user_group_ids": "g1"}, "user_group_ids", []string{"g1"}},
 		{"comma-separated with spaces", map[string]interface{}{"user_group_ids": " g1 , g2 ,g3"}, "user_group_ids", []string{"g1", "g2", "g3"}},
 		{"empty entries skipped", map[string]interface{}{"user_group_ids": "g1,,, g2 ,"}, "user_group_ids", []string{"g1", "g2"}},
+		// []interface{} wire format — produced by structpb.Struct.AsMap() for StringListField values
+		{"native list", map[string]interface{}{"env_roles": []interface{}{"dev:Admin", "prod:Analyst"}}, "env_roles", []string{"dev:Admin", "prod:Analyst"}},
+		{"native list with blank entry", map[string]interface{}{"env_roles": []interface{}{"", "dev:Admin"}}, "env_roles", []string{"dev:Admin"}},
+		{"native list with whitespace entry", map[string]interface{}{"env_roles": []interface{}{"  ", "dev:Admin"}}, "env_roles", []string{"dev:Admin"}},
+		{"native list non-string element skipped", map[string]interface{}{"env_roles": []interface{}{42, "dev:Admin"}}, "env_roles", []string{"dev:Admin"}},
+		{"native list all empty", map[string]interface{}{"env_roles": []interface{}{"", ""}}, "env_roles", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -37,27 +124,45 @@ func TestOptionalStringListField(t *testing.T) {
 
 func TestBuildInviteRequest(t *testing.T) {
 	tests := []struct {
-		name     string
-		inName   string
-		email    string
-		profile  map[string]interface{}
-		expected client.InviteCollaboratorRequest
+		name              string
+		inName            string
+		email             string
+		profile           map[string]interface{}
+		expected          client.InviteCollaboratorRequest
+		expectedMalformed []string
 	}{
 		{
-			name:     "minimal — no roles, no groups",
+			name:     "minimal — no env_roles field",
 			inName:   "New Hire",
 			email:    "new@example.com",
 			profile:  map[string]interface{}{},
 			expected: client.InviteCollaboratorRequest{Name: "New Hire", Email: "new@example.com"},
 		},
 		{
-			name:    "all three env roles in dev/test/prod order",
-			inName:  "Admin User",
-			email:   "admin@example.com",
-			profile: map[string]interface{}{"dev_role": "Admin", "test_role": "Operator", "prod_role": "Analyst"},
+			// Native list format: structpb.Struct.AsMap() produces []interface{} for StringListField.
+			name:   "single entry dev:Admin via native list",
+			inName: "Admin User",
+			email:  "admin@example.com",
+			profile: map[string]interface{}{
+				"env_roles": []interface{}{"dev:Admin"},
+			},
 			expected: client.InviteCollaboratorRequest{
-				Name:  "Admin User",
-				Email: "admin@example.com",
+				Name:     "Admin User",
+				Email:    "admin@example.com",
+				EnvRoles: []client.InviteEnvRole{{EnvironmentType: "dev", Name: "Admin"}},
+			},
+		},
+		{
+			// Multiple entries covering all three environments.
+			name:   "multiple entries dev/test/prod via native list",
+			inName: "Full Access",
+			email:  "full@example.com",
+			profile: map[string]interface{}{
+				"env_roles": []interface{}{"dev:Admin", "test:Operator", "prod:Analyst"},
+			},
+			expected: client.InviteCollaboratorRequest{
+				Name:  "Full Access",
+				Email: "full@example.com",
 				EnvRoles: []client.InviteEnvRole{
 					{EnvironmentType: "dev", Name: "Admin"},
 					{EnvironmentType: "test", Name: "Operator"},
@@ -66,21 +171,54 @@ func TestBuildInviteRequest(t *testing.T) {
 			},
 		},
 		{
-			name:    "subset — only prod_role; empty roles skipped",
-			inName:  "Prod Only",
-			email:   "prod@example.com",
-			profile: map[string]interface{}{"dev_role": "", "prod_role": "Analyst"},
+			// Blank entry in the list is silently skipped.
+			name:   "blank entry skipped",
+			inName: "Blank Test",
+			email:  "blank@example.com",
+			profile: map[string]interface{}{
+				"env_roles": []interface{}{"", "dev:Admin"},
+			},
 			expected: client.InviteCollaboratorRequest{
-				Name:     "Prod Only",
-				Email:    "prod@example.com",
-				EnvRoles: []client.InviteEnvRole{{EnvironmentType: "prod", Name: "Analyst"}},
+				Name:     "Blank Test",
+				Email:    "blank@example.com",
+				EnvRoles: []client.InviteEnvRole{{EnvironmentType: "dev", Name: "Admin"}},
 			},
 		},
 		{
-			name:    "roles + user_group_ids together",
-			inName:  "Grouped",
-			email:   "grouped@example.com",
-			profile: map[string]interface{}{"dev_role": "Admin", "user_group_ids": " 10 , 20 "},
+			// Entry with no colon is reported as malformed, valid entries still parsed.
+			name:   "malformed entry (no colon) reported",
+			inName: "Malformed Test",
+			email:  "malformed@example.com",
+			profile: map[string]interface{}{
+				"env_roles": []interface{}{"AdminNoColon", "dev:Admin"},
+			},
+			expected: client.InviteCollaboratorRequest{
+				Name:     "Malformed Test",
+				Email:    "malformed@example.com",
+				EnvRoles: []client.InviteEnvRole{{EnvironmentType: "dev", Name: "Admin"}},
+			},
+			expectedMalformed: []string{"AdminNoColon"},
+		},
+		{
+			// Unknown env prefix is reported as malformed.
+			name:   "unknown env prefix reported",
+			inName: "Unknown Env",
+			email:  "unknown@example.com",
+			profile: map[string]interface{}{
+				"env_roles": []interface{}{"staging:Admin"},
+			},
+			expected:          client.InviteCollaboratorRequest{Name: "Unknown Env", Email: "unknown@example.com"},
+			expectedMalformed: []string{"staging:Admin"},
+		},
+		{
+			// env_roles list + user_group_ids string together.
+			name:   "env_roles + user_group_ids",
+			inName: "Grouped",
+			email:  "grouped@example.com",
+			profile: map[string]interface{}{
+				"env_roles":     []interface{}{"dev:Admin"},
+				"user_group_ids": " 10 , 20 ",
+			},
 			expected: client.InviteCollaboratorRequest{
 				Name:         "Grouped",
 				Email:        "grouped@example.com",
@@ -91,9 +229,12 @@ func TestBuildInviteRequest(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildInviteRequest(tt.inName, tt.email, tt.profile)
+			got, malformed := buildInviteRequest(tt.inName, tt.email, tt.profile)
 			if !reflect.DeepEqual(got, tt.expected) {
 				t.Errorf("buildInviteRequest() = %#v, want %#v", got, tt.expected)
+			}
+			if !reflect.DeepEqual(malformed, tt.expectedMalformed) {
+				t.Errorf("buildInviteRequest() malformed = %#v, want %#v", malformed, tt.expectedMalformed)
 			}
 		})
 	}

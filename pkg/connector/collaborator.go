@@ -318,11 +318,7 @@ func (o *collaboratorBuilder) CreateAccount(
 	l := ctxzap.Extract(ctx)
 	profileMap := accountInfo.GetProfile().AsMap()
 
-	email := accountInfo.GetLogin()
-	if email == "" {
-		email, _ = profileMap["email"].(string)
-	}
-	email = strings.TrimSpace(email)
+	email := resolveInviteEmail(accountInfo.GetLogin(), accountInfo.GetEmails(), profileMap)
 	if email == "" {
 		return nil, nil, nil, status.Errorf(codes.InvalidArgument, "baton-workato: create account: email is required")
 	}
@@ -348,14 +344,27 @@ func (o *collaboratorBuilder) CreateAccount(
 	// Step 2: build and send the invitation. Tag each role's role_type by resolving
 	// the name against the environment-roles catalog; unresolved names default to
 	// privilege_group on Workato's side.
-	inviteReq := buildInviteRequest(name, email, profileMap)
+	inviteReq, malformedEnvRoles := buildInviteRequest(name, email, profileMap)
+
+	// Name the bad entries instead of silently dropping them, so a mapping that
+	// only supplies malformed values (e.g. "Admin" or "staging:Admin") fails with
+	// a specific, actionable error rather than the opaque "at least one
+	// environment role is required" below.
+	if len(malformedEnvRoles) > 0 {
+		return nil, nil, nil, status.Errorf(
+			codes.InvalidArgument,
+			"baton-workato: create account: malformed env_roles entries %v "+
+				"(expected \"env:role\" with env one of dev, test, prod)",
+			malformedEnvRoles,
+		)
+	}
 
 	// Workato requires at least one environment role on every invitation — a user
 	// group does NOT satisfy it (verified against the live API: a group-only invite
 	// 400s with "role_name or env_roles is required" just like an empty one). Fail
 	// early with a clear message instead of round-tripping to that opaque 400.
 	if len(inviteReq.EnvRoles) == 0 {
-		return nil, nil, nil, status.Errorf(codes.InvalidArgument, "baton-workato: create account: at least one environment role (dev_role/test_role/prod_role) is required")
+		return nil, nil, nil, status.Errorf(codes.InvalidArgument, "baton-workato: create account: at least one environment role is required (map env_roles as \"env:role\", e.g. \"dev:Admin\")")
 	}
 
 	resolveEnvRoleTypes(ctx, o.client, inviteReq.EnvRoles)
@@ -423,40 +432,45 @@ func (o *collaboratorBuilder) Delete(ctx context.Context, resourceID *v2.Resourc
 }
 
 // buildInviteRequest assembles the POST /api/member_invitations body from the
-// account-creation profile. env_roles is built from per-environment role-name
-// fields (dev_role/test_role/prod_role) and user_group_ids from a comma-separated
-// string of group ids. All are optional but Workato generally needs at least one
-// role to make the invite usable, matching the official Workato Team API and the
-// connector's own UpdateCollaboratorRoles shape.
-func buildInviteRequest(name, email string, profileMap map[string]interface{}) client.InviteCollaboratorRequest {
+// account-creation profile. env_roles is a required list where each entry is in
+// "env:role" format (e.g. "dev:Admin", "prod:Analyst"). Allowed environment
+// prefixes are dev, test, and prod; entries with unknown prefixes, no colon, or
+// an empty role are collected as malformed and cause CreateAccount to fail with
+// InvalidArgument. user_group_ids is an optional comma-separated string of
+// group IDs. The shape reuses client.InviteEnvRole{EnvironmentType, Name}.
+func buildInviteRequest(name, email string, profileMap map[string]interface{}) (client.InviteCollaboratorRequest, []string) {
 	req := client.InviteCollaboratorRequest{
 		Name:  name,
 		Email: email,
 	}
 
-	envRoleFields := []struct {
-		key string
-		env string
-	}{
-		{"dev_role", "dev"},
-		{"test_role", "test"},
-		{"prod_role", "prod"},
-	}
-
-	for _, f := range envRoleFields {
-		roleName := optionalStringField(profileMap, f.key)
-		if roleName == "" {
+	var malformed []string
+	for _, entry := range optionalStringListField(profileMap, "env_roles") {
+		parts := strings.SplitN(entry, ":", 2)
+		if len(parts) != 2 {
+			malformed = append(malformed, entry)
 			continue
 		}
-		req.EnvRoles = append(req.EnvRoles, client.InviteEnvRole{
-			EnvironmentType: f.env,
-			Name:            roleName,
-		})
+		envPart := strings.ToLower(strings.TrimSpace(parts[0]))
+		roleName := strings.TrimSpace(parts[1])
+		if roleName == "" {
+			malformed = append(malformed, entry)
+			continue
+		}
+		switch envPart {
+		case "dev", "test", "prod":
+			req.EnvRoles = append(req.EnvRoles, client.InviteEnvRole{
+				EnvironmentType: envPart,
+				Name:            roleName,
+			})
+		default:
+			malformed = append(malformed, entry)
+		}
 	}
 
 	req.UserGroupIDs = optionalStringListField(profileMap, "user_group_ids")
 
-	return req
+	return req, malformed
 }
 
 // environmentRoleResolver looks up an environment role by name. *client.WorkatoClient
@@ -508,25 +522,86 @@ func optionalStringField(profileMap map[string]interface{}, key string) string {
 	return strings.TrimSpace(raw)
 }
 
-// optionalStringListField parses a comma-separated string profile field into a
-// slice, trimming spaces and dropping empties. Returns a nil slice when the field
-// is absent or empty.
+// optionalStringListField parses a profile field into a slice, trimming spaces
+// and dropping empties. It handles two wire formats:
+//   - []interface{} — produced by structpb.Struct.AsMap() for StringListField
+//     values; each element is type-asserted to string.
+//   - string — comma-separated (used by user_group_ids and legacy callers).
+//
+// Returns a nil slice when the field is absent or empty.
 func optionalStringListField(profileMap map[string]interface{}, key string) []string {
-	raw, _ := profileMap[key].(string)
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
+	raw, ok := profileMap[key]
+	if !ok {
 		return nil
 	}
+	switch v := raw.(type) {
+	case []interface{}:
+		var values []string
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				if s = strings.TrimSpace(s); s != "" {
+					values = append(values, s)
+				}
+			}
+		}
+		return values
+	case string:
+		v = strings.TrimSpace(v)
+		if v == "" {
+			return nil
+		}
+		var values []string
+		for _, part := range strings.Split(v, ",") {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				values = append(values, part)
+			}
+		}
+		return values
+	default:
+		return nil
+	}
+}
 
-	var values []string
-	for _, part := range strings.Split(raw, ",") {
-		part = strings.TrimSpace(part)
-		if part == "" {
+// resolveInviteEmail picks the best email address to use for a Workato
+// invitation. It prefers the explicitly-mapped "email" profile field (which C1
+// populates from the directory user's real email), then falls back to the login
+// only when it is email-shaped, and lastly to the addresses from GetEmails() —
+// preferring the primary (IsPrimary == true) entry when present, otherwise the
+// first non-empty address. This avoids sending a bare username handle to
+// Workato's invite API, which rejects non-email values with "400 Email is invalid".
+func resolveInviteEmail(login string, emails []*v2.AccountInfo_Email, profileMap map[string]interface{}) string {
+	// Prefer the explicitly-mapped profile field.
+	if mapped := optionalStringField(profileMap, "email"); mapped != "" {
+		return mapped
+	}
+	// Use login only when it looks like an email address.
+	if trimmed := strings.TrimSpace(login); isEmailShaped(trimmed) {
+		return trimmed
+	}
+	// Last resort: prefer primary email from GetEmails(), fall back to first non-empty.
+	var first string
+	for _, e := range emails {
+		addr := strings.TrimSpace(e.GetAddress())
+		if addr == "" {
 			continue
 		}
-		values = append(values, part)
+		if e.GetIsPrimary() {
+			return addr
+		}
+		if first == "" {
+			first = addr
+		}
 	}
-	return values
+	return first
+}
+
+// isEmailShaped returns true when s contains a non-empty local part, an "@",
+// and a non-empty domain part. It is intentionally lenient — the goal is only
+// to distinguish bare username handles (no "@") from plausible email strings.
+func isEmailShaped(s string) bool {
+	at := strings.LastIndex(s, "@")
+	return at > 0 && at < len(s)-1
 }
 
 func newCollaboratorBuilder(client *client.WorkatoClient, env workato.Environment, disableCustomRolesSync bool, syncEnvironmentRoles bool) *collaboratorBuilder {

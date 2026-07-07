@@ -86,7 +86,7 @@ jobs:
           connector: ./baton-workato
           account-email: newhire@example.com
           account-login: newhire@example.com
-          account-profile: '{"name":"New Hire","email":"newhire@example.com","dev_role":"Admin"}'
+          account-profile: '{"name":"New Hire","email":"newhire@example.com","env_roles":["dev:Admin"]}'
           account-type: collaborator
           search-method: email
       - name: Stop test server

@@ -71,35 +71,17 @@ func (d *Connector) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error)
 					Placeholder: "Jane Doe",
 					Order:       2,
 				},
-				"dev_role": {
-					DisplayName: "Development Role",
-					Required:    false,
-					Description: "Workato role NAME for the Development environment — privilege-group (e.g. \"Admin\") or environment role; type detected automatically.",
-					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
-						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+				"env_roles": {
+					DisplayName: "Environment Roles",
+					Required:    true,
+					Description: "List of environment + role assignments in \"env:role\" format " +
+						"(e.g. \"dev:Admin\", \"prod:Analyst\"). Allowed environments: dev, test, prod. " +
+						"At least one entry is required. The role must exist in the target environment — " +
+						"a non-provisioned environment fails at invite time with \"Environment <env> not found\".",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringListField{
+						StringListField: &v2.ConnectorAccountCreationSchema_StringListField{},
 					},
-					Placeholder: "Admin",
-					Order:       3,
-				},
-				"test_role": {
-					DisplayName: "Test Role",
-					Required:    false,
-					Description: "Workato role NAME for the Test environment — privilege-group (e.g. \"Operator\") or environment role; type detected automatically.",
-					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
-						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
-					},
-					Placeholder: "Operator",
-					Order:       4,
-				},
-				"prod_role": {
-					DisplayName: "Production Role",
-					Required:    false,
-					Description: "Workato role NAME for the Production environment — privilege-group (e.g. \"Analyst\") or environment role; type detected automatically.",
-					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
-						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
-					},
-					Placeholder: "Analyst",
-					Order:       5,
+					Order: 3,
 				},
 				"user_group_ids": {
 					DisplayName: "User Group IDs",
@@ -109,7 +91,7 @@ func (d *Connector) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error)
 						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
 					},
 					Placeholder: "am-WxEKCibh-dTXBtz,am-AbCdEfGh-iJkLmNo",
-					Order:       6,
+					Order:       4,
 				},
 			},
 		},

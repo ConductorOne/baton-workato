@@ -6,6 +6,37 @@ description: C1 provides identity governance and just-in-time provisioning for W
 sidebarTitle: Workato
 ---
 
+## Provision accounts
+
+When provisioning a new collaborator account, the following fields are available on the account creation form:
+
+| Field | Required | Description |
+| :---- | :------- | :---------- |
+| **Email** | Yes | Email address of the collaborator to invite. |
+| **Name** | Yes | Full name of the collaborator. |
+| **Environment Roles** | Yes | List of environment + role assignments. Each entry must be in `env:role` format (e.g. `dev:Admin`, `prod:Analyst`). At least one entry is required. |
+| **User Group IDs** | No | Comma-separated list of Workato user group IDs to add the collaborator to. |
+
+### Environment Roles format
+
+Each entry in **Environment Roles** encodes the target environment and the role name separated by a colon:
+
+```
+<environment>:<role name>
+```
+
+Allowed environment values are `dev`, `test`, and `prod`. The role name must match an existing role (privilege-group or environment role) in your Workato workspace.
+
+Examples:
+
+- `dev:Admin` — assign the Admin role in the Development environment
+- `prod:Analyst` — assign the Analyst role in the Production environment
+- `test:Operator` — assign the Operator role in the Test environment
+
+<Warning>
+The role must target an environment that the workspace has provisioned. If the workspace does not have the specified environment, the invitation fails with `Environment <env> not found`.
+</Warning>
+
 ## Capabilities
 
 | Resource     | Sync | Provision |
