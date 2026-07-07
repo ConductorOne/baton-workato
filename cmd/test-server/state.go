@@ -229,8 +229,9 @@ func (s *State) UpdateMemberRoles(id int, roles []SimpleRole) bool {
 	for _, r := range roles {
 		touched[r.EnvironmentType] = true
 	}
-	kept := slices.DeleteFunc(slices.Clone(m.Roles), func(r SimpleRole) bool { return touched[r.EnvironmentType] })
-	m.Roles = append(kept, roles...)
+	merged := slices.DeleteFunc(slices.Clone(m.Roles), func(r SimpleRole) bool { return touched[r.EnvironmentType] })
+	merged = append(merged, roles...)
+	m.Roles = merged
 	return true
 }
 
