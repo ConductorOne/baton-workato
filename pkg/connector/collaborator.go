@@ -434,8 +434,9 @@ func (o *collaboratorBuilder) Delete(ctx context.Context, resourceID *v2.Resourc
 // buildInviteRequest assembles the POST /api/member_invitations body from the
 // account-creation profile. env_roles is a required list where each entry is in
 // "env:role" format (e.g. "dev:Admin", "prod:Analyst"). Allowed environment
-// prefixes are dev, test, and prod; entries with unknown prefixes or no colon
-// are silently skipped. user_group_ids is an optional comma-separated string of
+// prefixes are dev, test, and prod; entries with unknown prefixes, no colon, or
+// an empty role are collected as malformed and cause CreateAccount to fail with
+// InvalidArgument. user_group_ids is an optional comma-separated string of
 // group IDs. The shape reuses client.InviteEnvRole{EnvironmentType, Name}.
 func buildInviteRequest(name, email string, profileMap map[string]interface{}) (client.InviteCollaboratorRequest, []string) {
 	req := client.InviteCollaboratorRequest{
