@@ -124,11 +124,12 @@ func TestOptionalStringListField(t *testing.T) {
 
 func TestBuildInviteRequest(t *testing.T) {
 	tests := []struct {
-		name     string
-		inName   string
-		email    string
-		profile  map[string]interface{}
-		expected client.InviteCollaboratorRequest
+		name              string
+		inName            string
+		email             string
+		profile           map[string]interface{}
+		expected          client.InviteCollaboratorRequest
+		expectedMalformed []string
 	}{
 		{
 			name:     "minimal — no env_roles field",
@@ -184,8 +185,8 @@ func TestBuildInviteRequest(t *testing.T) {
 			},
 		},
 		{
-			// Entry with no colon is silently skipped.
-			name:   "malformed entry (no colon) skipped",
+			// Entry with no colon is reported as malformed, valid entries still parsed.
+			name:   "malformed entry (no colon) reported",
 			inName: "Malformed Test",
 			email:  "malformed@example.com",
 			profile: map[string]interface{}{
@@ -196,16 +197,18 @@ func TestBuildInviteRequest(t *testing.T) {
 				Email:    "malformed@example.com",
 				EnvRoles: []client.InviteEnvRole{{EnvironmentType: "dev", Name: "Admin"}},
 			},
+			expectedMalformed: []string{"AdminNoColon"},
 		},
 		{
-			// Unknown env prefix is silently skipped.
-			name:   "unknown env prefix skipped",
+			// Unknown env prefix is reported as malformed.
+			name:   "unknown env prefix reported",
 			inName: "Unknown Env",
 			email:  "unknown@example.com",
 			profile: map[string]interface{}{
 				"env_roles": []interface{}{"staging:Admin"},
 			},
-			expected: client.InviteCollaboratorRequest{Name: "Unknown Env", Email: "unknown@example.com"},
+			expected:          client.InviteCollaboratorRequest{Name: "Unknown Env", Email: "unknown@example.com"},
+			expectedMalformed: []string{"staging:Admin"},
 		},
 		{
 			// env_roles list + user_group_ids string together.
@@ -226,9 +229,12 @@ func TestBuildInviteRequest(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildInviteRequest(tt.inName, tt.email, tt.profile)
+			got, malformed := buildInviteRequest(tt.inName, tt.email, tt.profile)
 			if !reflect.DeepEqual(got, tt.expected) {
 				t.Errorf("buildInviteRequest() = %#v, want %#v", got, tt.expected)
+			}
+			if !reflect.DeepEqual(malformed, tt.expectedMalformed) {
+				t.Errorf("buildInviteRequest() malformed = %#v, want %#v", malformed, tt.expectedMalformed)
 			}
 		})
 	}
