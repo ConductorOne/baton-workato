@@ -351,7 +351,12 @@ func (o *collaboratorBuilder) CreateAccount(
 	// a specific, actionable error rather than the opaque "at least one
 	// environment role is required" below.
 	if len(malformedEnvRoles) > 0 {
-		return nil, nil, nil, status.Errorf(codes.InvalidArgument, "baton-workato: create account: malformed env_roles entries %v (expected \"env:role\" with env one of dev, test, prod)", malformedEnvRoles)
+		return nil, nil, nil, status.Errorf(
+			codes.InvalidArgument,
+			"baton-workato: create account: malformed env_roles entries %v "+
+				"(expected \"env:role\" with env one of dev, test, prod)",
+			malformedEnvRoles,
+		)
 	}
 
 	// Workato requires at least one environment role on every invitation — a user
