@@ -44,8 +44,11 @@ The role must target an environment that the workspace has provisioned. If the w
 | Accounts     | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>   | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>        | 
 | Privileges   | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>   |           | 
 | Roles        | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>   | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>        | 
+| Environment roles | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>   | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>        | 
 | Folders      | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>   |           | 
 | Projects     | <Icon icon="square-check" iconType="solid"  color="#c937ae"/>   |           | 
+
+**Environment roles (RBAC v2):** Workato allows exactly one environment role per collaborator per environment. ConductorOne models environment roles as mutually exclusive entitlements: granting a new role for an environment supersedes the collaborator's existing role there. Directly revoking an environment role is not supported by the connector; to change a collaborator's access, grant the replacement role instead.
 
 ## Gather Workato credentials 
 
@@ -128,6 +131,8 @@ You'll also need to specify the location of your Workato data center. Workato di
 * JP Data Center: https://app.jp.workato.com/api/
 * SG Data Center: https://app.sg.workato.com/api/
 * AU Data Center: https://app.au.workato.com/api/
+* IL Data Center: https://app.il.workato.com/api/
+* Developer Sandbox: https://app.trial.workato.com/api/
 
 **Done.** Next, move on to the connector configuration instructions. 
 
@@ -176,7 +181,7 @@ Find the **Settings** area of the page and click **Edit**.
 Enter the API token in the **API key** field. 
 </Step>
 <Step>
-In the **Data center** field, enter one of `us`, `eu`, `jp`, `sg`, or `au` to identify the location of your Workato data center. The default is `us`. 
+In the **Data center** field, enter one of `us`, `eu`, `jp`, `sg`, `au`, `il`, or `sandbox` (developer sandbox) to identify the location of your Workato data center. The default is `us`. 
 </Step>
 <Step>
 In the **Environment** field, enter one of `dev`, `test`, or `prod` to identify your Workato environment. The default is `dev`. 
@@ -262,7 +267,7 @@ stringData:
   
   # Workato credentials
   BATON_WORKATO_API_KEY: <Workato API key>
-  BATON_WORKATO_DATA_CENTER: <Your Workato data center (one of us, eu, jp, sg, or au). Default is us.>
+  BATON_WORKATO_DATA_CENTER: <Your Workato data center (one of us, eu, jp, sg, au, il, or sandbox). Default is us.>
   BATON_WORKATO_ENV: <Your Workato environment (one of dev, test, or prod). Default is 'dev'>
 
   # Optional: set to true to skip legacy custom role sync (required if your workspace

@@ -22,7 +22,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Install baton
-        run: ./scripts/get-baton.sh && mv baton /usr/local/bin
+        uses: ConductorOne/github-workflows/actions/get-baton@v4
       - name: Build baton-workato
         run: go build ./cmd/baton-workato
       - name: Sync
@@ -51,7 +51,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Install baton
-        run: ./scripts/get-baton.sh && mv baton /usr/local/bin
+        uses: ConductorOne/github-workflows/actions/get-baton@v4
       - name: Build baton-workato
         run: go build ./cmd/baton-workato
       - name: Sync
@@ -78,8 +78,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - uses: ./.github/actions/start-test-server
+      - name: Install baton
+        uses: ConductorOne/github-workflows/actions/get-baton@v4
       - name: Run sync
         run: ./baton-workato
+      - name: Verify privilege and folder grants from mock
+        # The mock derives /privileges rows (including the undocumented folder_ids
+        # field the live API returns) from each member's roles; these grants only
+        # exist if the connector's privilege-grant and folder-grant paths ran.
+        run: |
+          baton grants --entitlement="privilege:Recipes-read:assigned" | grep -w "1000"
+          baton grants --entitlement="folder:10:collaborator-access" | grep -w "1000"
       - name: Account provisioning (create/delete)
         uses: ConductorOne/github-workflows/actions/account-provisioning@v4
         with:
@@ -89,6 +98,42 @@ jobs:
           account-profile: '{"name":"New Hire","email":"newhire@example.com","env_roles":["dev:Admin"]}'
           account-type: collaborator
           search-method: email
+      - name: Stop test server
+        if: always()
+        run: pkill -f test-server || true
+
+  test-grant-environment-role-mock:
+    # Cross-environment preservation against the in-process mock: granting an
+    # environment role in one environment must not touch roles in other
+    # environments (PUT /api/members/:id selective-update semantics — the live
+    # tenants reachable from CI are single-environment, so this contract is only
+    # testable here).
+    runs-on: ubuntu-latest
+    env:
+      BATON_LOG_LEVEL: debug
+      BATON_WORKATO_API_KEY: test-token
+      BATON_WORKATO_BASE_URL: http://localhost:8765
+      BATON_WORKATO_ENV: all
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/start-test-server
+      - name: Install baton
+        uses: ConductorOne/github-workflows/actions/get-baton@v4
+      - name: Sync
+        run: ./baton-workato
+      - name: Grant dev environment role to a member holding a prod role
+        run: ./baton-workato --grant-entitlement="environment_role:50-dev:collaborator-has" --grant-principal="1001" --grant-principal-type="collaborator"
+      - name: Verify prod role preserved and dev role added
+        run: |
+          MEMBER=$(curl -sf -H "Authorization: Bearer test-token" http://localhost:8765/api/members/1001)
+          echo "$MEMBER" | jq -e '.data.roles | map(select(.environment_type=="prod" and .role_name=="Operator")) | length == 1'
+          echo "$MEMBER" | jq -e '.data.roles | map(select(.environment_type=="dev" and .role_name=="Deployer")) | length == 1'
+      - name: Re-sync and verify both grants coexist
+        run: |
+          ./baton-workato
+          baton grants --entitlement="environment_role:50-dev:collaborator-has" | grep -w "1001"
+          baton grants --entitlement="role:Operator-prod:collaborator-has" | grep -w "1001"
       - name: Stop test server
         if: always()
         run: pkill -f test-server || true
