@@ -73,11 +73,6 @@ func projectResource(project *client.Project) (*v2.Resource, error) {
 		projectResourceType,
 		project.Id,
 		traits,
-		rs.WithAnnotation(
-			&v2.ChildResourceType{
-				ResourceTypeId: folderResourceType.Id,
-			},
-		),
 	)
 	if err != nil {
 		return nil, err
