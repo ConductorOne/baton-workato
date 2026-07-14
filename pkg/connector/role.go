@@ -11,9 +11,10 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
-	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -171,7 +172,19 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs
 		// privilege grants implementation
 		role := getRoleById(ctx, attr.Session, roleId)
 		if role == nil {
-			return rv, nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("role %s (%s) not found", resource.DisplayName, roleId))
+			// The role was listed (a resource exists) but is absent from the sync
+			// session cache at grant time — typically because it was deleted between
+			// the List and Grants phases, or the cache is not yet consistent. Skip
+			// this role's privilege grants for this sync instead of returning an
+			// error that fails the entire sync; the next sync recovers once the
+			// cache is consistent. This mirrors the deleted-role skip-and-continue
+			// handling in collaborator.go.
+			l := ctxzap.Extract(ctx)
+			l.Warn("baton-workato: role not found in session cache, skipping privilege grants",
+				zap.String("role_id", roleId),
+				zap.String("role_name", resource.DisplayName),
+			)
+			return rv, nil, nil
 		}
 
 		privileges, err := workato.FindRelatedPrivilegesErr(role.Privileges)
