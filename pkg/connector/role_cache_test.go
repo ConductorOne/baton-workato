@@ -194,6 +194,44 @@ func TestRoleGrantsSelfHealsEmptyCache(t *testing.T) {
 	}
 }
 
+// TestRoleGrantsSkipsGenuinelyAbsentRole verifies that a role which is still
+// absent after the self-heal re-list (e.g. deleted between the List and Grants
+// phases) is skipped gracefully rather than failing the sync. The self-heal
+// runs (GetRoles is called), the role still isn't found, and Grants returns no
+// error and no grants.
+func TestRoleGrantsSkipsGenuinelyAbsentRole(t *testing.T) {
+	ctx := context.Background()
+	// The server only knows role 175000; the resource under test is 999999.
+	served := []*client.Role{
+		{Id: 175000, Name: "Custom Reviewer", FolderIDs: []int{10}, Privileges: map[string][]string{}},
+	}
+
+	calls := 0
+	srv := rolesServer(t, served, &calls)
+	defer srv.Close()
+	c := newTestClient(t, srv.URL)
+
+	b := &roleBuilder{client: c, cache: newCollaboratorCache(c), env: workato.Development}
+
+	ghost, err := roleResource(&client.Role{Id: 999999, Name: "Ghost"}, workato.Development, workato.Development)
+	if err != nil {
+		t.Fatalf("failed to build role resource: %v", err)
+	}
+
+	store := newMemSessionStore() // empty cache
+
+	grants, _, err := b.Grants(ctx, ghost, resource.SyncOpAttrs{Session: store})
+	if err != nil {
+		t.Fatalf("expected genuinely-absent role to be skipped, got error: %v", err)
+	}
+	if calls == 0 {
+		t.Fatalf("expected self-heal to attempt a re-list before skipping")
+	}
+	if len(grants) != 0 {
+		t.Fatalf("expected 0 grants for a genuinely-absent role, got %d", len(grants))
+	}
+}
+
 // TestFolderGrantsSelfHealsEmptyCache verifies the folder grant path also heals
 // an empty roles cache: a folder scoped to a role must still emit its
 // collaborator-access grant after self-heal.

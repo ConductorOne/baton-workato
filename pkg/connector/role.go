@@ -11,9 +11,10 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
-	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -180,7 +181,17 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs
 			role = getRoleById(ctx, attr.Session, roleId)
 		}
 		if role == nil {
-			return rv, nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("role %s (%s) not found", resource.DisplayName, roleId))
+			// Genuinely absent even after re-listing (e.g. a custom role deleted
+			// between the List and Grants phases). Skip its privilege grants for
+			// this sync rather than erroring: the empty-cache case is already
+			// handled by the self-heal above, and the platform skips a NotFound
+			// here anyway, so erroring only adds noise. The next sync recovers.
+			l := ctxzap.Extract(ctx)
+			l.Warn("baton-workato: role not found after self-heal, skipping privilege grants",
+				zap.String("role_id", roleId),
+				zap.String("role_name", resource.DisplayName),
+			)
+			return rv, nil, nil
 		}
 
 		privileges, err := workato.FindRelatedPrivilegesErr(role.Privileges)
