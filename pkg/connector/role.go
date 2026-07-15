@@ -171,6 +171,15 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs
 		// privilege grants implementation
 		role := getRoleById(ctx, attr.Session, roleId)
 		if role == nil {
+			// The roles cache may be empty for this sync session (e.g. a resumed
+			// sync that ran under a new sync id without re-listing roles). Populate
+			// it once and retry before treating the role as genuinely absent.
+			if err := ensureRolesCache(ctx, attr.Session, o.client); err != nil {
+				return nil, nil, err
+			}
+			role = getRoleById(ctx, attr.Session, roleId)
+		}
+		if role == nil {
 			return rv, nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("role %s (%s) not found", resource.DisplayName, roleId))
 		}
 

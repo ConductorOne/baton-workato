@@ -17,7 +17,66 @@ const (
 	folderRolesCachePrefix            = "folder_roles"
 	rolesByNameCachePrefix            = "roles_by_name"
 	environmentRolesByNameCachePrefix = "environment_roles_by_name"
+
+	// rolesCachePopulatedKey is a sentinel stored alongside the roles cache to
+	// record that role.List (or a self-heal) has populated it for the current
+	// sync session. Role ids are numeric, so this key never collides with a
+	// cached role entry.
+	rolesCachePopulatedKey = "__roles_cache_populated__"
 )
+
+// rolesCachePopulated reports whether the roles caches have been populated for
+// the current sync session. On a fresh sync role.List populates them; on a
+// resumed/restarted sync (which runs under a new sync id and skips re-listing)
+// the sentinel is absent, which is the signal to self-heal.
+func rolesCachePopulated(ctx context.Context, sessionStorage sessions.SessionStore) bool {
+	populated, found, err := session.GetJSON[bool](ctx, sessionStorage, rolesCachePopulatedKey, sessions.WithPrefix(rolesCachePrefix))
+	if err != nil {
+		return false
+	}
+	return found && populated
+}
+
+// ensureRolesCache lazily populates the roles caches if they are absent for the
+// current sync session. It is a no-op once populated, so it fetches at most
+// once per session. This heals the case where a sync is resumed/restarted under
+// a new sync id without re-running role.List, which otherwise leaves the Grants
+// phase reading an empty roles cache (see CXP-629 grant-collapse investigation).
+func ensureRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, workatoClient *client.WorkatoClient) error {
+	if rolesCachePopulated(ctx, sessionStorage) {
+		return nil
+	}
+
+	l := ctxzap.Extract(ctx)
+	l.Info("baton-workato: roles cache not populated for this sync session, self-healing by re-listing roles")
+
+	roles, err := fetchAllRoles(ctx, workatoClient)
+	if err != nil {
+		return fmt.Errorf("baton-workato: failed to self-heal roles cache: %w", err)
+	}
+
+	return setRolesCache(ctx, sessionStorage, roles)
+}
+
+// fetchAllRoles pages through GetRoles and returns every custom role. Workato
+// exposes no get-role-by-id endpoint, so resolving a single role requires the
+// list; the role set is small, so this is cheap.
+func fetchAllRoles(ctx context.Context, workatoClient *client.WorkatoClient) ([]*client.Role, error) {
+	var all []*client.Role
+	token := ""
+	for {
+		roles, nextToken, _, err := workatoClient.GetRoles(ctx, token)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, roles...)
+		if nextToken == "" {
+			break
+		}
+		token = nextToken
+	}
+	return all, nil
+}
 
 func getRoleByFolder(ctx context.Context, sessionStorage sessions.SessionStore, folderID string) ([]*client.Role, error) {
 	folderRoles, found, err := session.GetJSON[[]*client.Role](ctx, sessionStorage, folderID, sessions.WithPrefix(folderRolesCachePrefix))
@@ -96,6 +155,13 @@ func setRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, ro
 		if err != nil {
 			return fmt.Errorf("failed to set roles by name in session storage: %w", err)
 		}
+	}
+
+	// Mark the roles cache as populated for this sync session so the Grants phase
+	// can tell an unpopulated cache (needs self-heal) from a folder/role that
+	// legitimately has no match. Set even when there are no custom roles.
+	if err := session.SetJSON(ctx, sessionStorage, rolesCachePopulatedKey, true, sessions.WithPrefix(rolesCachePrefix)); err != nil {
+		return fmt.Errorf("failed to mark roles cache as populated: %w", err)
 	}
 
 	return nil
