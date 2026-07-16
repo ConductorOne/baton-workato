@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/session"
 	"github.com/conductorone/baton-sdk/pkg/types/sessions"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
@@ -42,40 +43,48 @@ func rolesCachePopulated(ctx context.Context, sessionStorage sessions.SessionSto
 // once per session. This heals the case where a sync is resumed/restarted under
 // a new sync id without re-running role.List, which otherwise leaves the Grants
 // phase reading an empty roles cache (see CXP-629 grant-collapse investigation).
-func ensureRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, workatoClient *client.WorkatoClient) error {
+func ensureRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, workatoClient *client.WorkatoClient) (annotations.Annotations, error) {
 	if rolesCachePopulated(ctx, sessionStorage) {
-		return nil
+		return nil, nil
 	}
 
 	l := ctxzap.Extract(ctx)
 	l.Info("baton-workato: roles cache not populated for this sync session, self-healing by re-listing roles")
 
-	roles, err := fetchAllRoles(ctx, workatoClient)
+	roles, annos, err := fetchAllRoles(ctx, workatoClient)
 	if err != nil {
-		return fmt.Errorf("baton-workato: failed to self-heal roles cache: %w", err)
+		return annos, fmt.Errorf("baton-workato: failed to self-heal roles cache: %w", err)
 	}
 
-	return setRolesCache(ctx, sessionStorage, roles)
+	// The self-heal holds the complete role set, so folder_roles is rebuilt from
+	// scratch rather than merged into whatever is already cached. Merging on this
+	// path double-counts roles when an earlier setRolesCache wrote folder_roles
+	// but died before the populated sentinel (e.g. a transient session-store
+	// write failure), and the retried self-heal appends the same roles again.
+	return annos, setRolesCache(ctx, sessionStorage, roles, false)
 }
 
-// fetchAllRoles pages through GetRoles and returns every custom role. Workato
-// exposes no get-role-by-id endpoint, so resolving a single role requires the
-// list; the role set is small, so this is cheap.
-func fetchAllRoles(ctx context.Context, workatoClient *client.WorkatoClient) ([]*client.Role, error) {
+// fetchAllRoles pages through GetRoles and returns every custom role along with
+// the annotations from the final page (rate-limit signal). Workato exposes no
+// get-role-by-id endpoint, so resolving a single role requires the list; the
+// role set is small, so this is cheap.
+func fetchAllRoles(ctx context.Context, workatoClient *client.WorkatoClient) ([]*client.Role, annotations.Annotations, error) {
 	var all []*client.Role
+	var annos annotations.Annotations
 	token := ""
 	for {
-		roles, nextToken, _, err := workatoClient.GetRoles(ctx, token)
+		roles, nextToken, pageAnnos, err := workatoClient.GetRoles(ctx, token)
 		if err != nil {
-			return nil, err
+			return nil, pageAnnos, wrapRolesAuthError(err)
 		}
+		annos = pageAnnos
 		all = append(all, roles...)
 		if nextToken == "" {
 			break
 		}
 		token = nextToken
 	}
-	return all, nil
+	return all, annos, nil
 }
 
 func getRoleByFolder(ctx context.Context, sessionStorage sessions.SessionStore, folderID string) ([]*client.Role, error) {
@@ -116,7 +125,12 @@ func getRoleByName(ctx context.Context, sessionStorage sessions.SessionStore, ro
 	return role, nil
 }
 
-func setRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, roles []*client.Role) error {
+// setRolesCache writes the roles, folder_roles, and roles_by_name caches and the
+// populated sentinel. mergeFolderRoles controls how folder_roles is built: the
+// paged role.List path passes true so each page appends onto folder_roles
+// accumulated by prior pages; the self-heal path passes false because it holds
+// the complete role set and rebuilding from scratch keeps a retry idempotent.
+func setRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, roles []*client.Role, mergeFolderRoles bool) error {
 	if len(roles) > 0 {
 		err := session.SetManyJSON(ctx, sessionStorage, parseJSONRolesCache(roles), sessions.WithPrefix(rolesCachePrefix))
 		if err != nil {
@@ -131,9 +145,13 @@ func setRolesCache(ctx context.Context, sessionStorage sessions.SessionStore, ro
 		for _, folderID := range role.FolderIDs {
 			folderIDStr := strconv.Itoa(folderID)
 			if _, ok := mapRoles[folderIDStr]; !ok {
-				existing, err := getRoleByFolder(ctx, sessionStorage, folderIDStr)
-				if err != nil {
-					return err
+				var existing []*client.Role
+				if mergeFolderRoles {
+					var err error
+					existing, err = getRoleByFolder(ctx, sessionStorage, folderIDStr)
+					if err != nil {
+						return err
+					}
 				}
 				mapRoles[folderIDStr] = existing
 			}

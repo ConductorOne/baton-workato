@@ -232,6 +232,37 @@ func TestRoleGrantsSkipsGenuinelyAbsentRole(t *testing.T) {
 	}
 }
 
+// TestSelfHealSetRolesCacheIdempotent locks in the fix for the self-heal
+// duplicate-grants hazard: the self-heal path (mergeFolderRoles=false) holds the
+// complete role set, so running it more than once must not double folder_roles.
+// This models a retry after a partial write that set folder_roles but died before
+// the populated sentinel (e.g. a transient session-store write failure). Before
+// the fix, setRolesCache merged into the existing folder_roles and re-appended the
+// same roles, doubling the folder's collaborator-access grants on the next sync.
+func TestSelfHealSetRolesCacheIdempotent(t *testing.T) {
+	ctx := context.Background()
+	roles := []*client.Role{
+		{Id: 175000, Name: "Custom Reviewer", FolderIDs: []int{10}, Privileges: map[string][]string{}},
+	}
+	store := newMemSessionStore()
+
+	if err := setRolesCache(ctx, store, roles, false); err != nil {
+		t.Fatalf("first self-heal setRolesCache: %v", err)
+	}
+	// Second self-heal write (sentinel lost after a partial prior write).
+	if err := setRolesCache(ctx, store, roles, false); err != nil {
+		t.Fatalf("second self-heal setRolesCache: %v", err)
+	}
+
+	folderRoles, err := getRoleByFolder(ctx, store, "10")
+	if err != nil {
+		t.Fatalf("getRoleByFolder: %v", err)
+	}
+	if len(folderRoles) != 1 {
+		t.Fatalf("folder 10: got %d roles after two self-heals, want 1 (no duplication)", len(folderRoles))
+	}
+}
+
 // TestFolderGrantsSelfHealsEmptyCache verifies the folder grant path also heals
 // an empty roles cache: a folder scoped to a role must still emit its
 // collaborator-access grant after self-heal.

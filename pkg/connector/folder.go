@@ -120,13 +120,18 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, attr 
 	if err != nil {
 		return nil, nil, err
 	}
+	var healResults *rs.SyncOpResults
 	if len(folderRoles) == 0 {
 		// No mapping found. This is either a folder with no roles or an empty
 		// roles cache for this sync session (e.g. a resumed sync that skipped
 		// re-listing roles). ensureRolesCache is a no-op once the cache is
 		// populated, so this only fetches when the cache is genuinely missing.
-		if err := ensureRolesCache(ctx, attr.Session, o.client); err != nil {
-			return nil, nil, err
+		annos, err := ensureRolesCache(ctx, attr.Session, o.client)
+		if err != nil {
+			return nil, &rs.SyncOpResults{Annotations: annos}, err
+		}
+		if len(annos) > 0 {
+			healResults = &rs.SyncOpResults{Annotations: annos}
 		}
 		folderRoles, err = getRoleByFolder(ctx, attr.Session, folderId)
 		if err != nil {
@@ -149,7 +154,7 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, attr 
 		)))
 	}
 
-	return rv, nil, nil
+	return rv, healResults, nil
 }
 
 func newFolderBuilder(client *client.WorkatoClient, disableCustomRolesSync bool) *folderBuilder {
