@@ -11,9 +11,10 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
-	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/conductorone/baton-workato/pkg/connector/client"
 	"github.com/conductorone/baton-workato/pkg/connector/workato"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -36,6 +37,23 @@ func (o *roleBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 	return roleResourceType
 }
 
+// wrapRolesAuthError adds actionable guidance to an Unauthenticated/PermissionDenied
+// error from GetRoles (the API client lacks the "List non-system roles" privilege);
+// any other error passes through unchanged. Shared by role.List and the roles-cache
+// self-heal so a resumed/targeted sync that hits the self-heal gets the same message.
+func wrapRolesAuthError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if code := status.Code(err); code == codes.Unauthenticated || code == codes.PermissionDenied {
+		return fmt.Errorf(
+			"baton-workato: API client is not authorized to list legacy custom roles. "+
+				"Grant the 'List non-system roles' privilege to the API client in Workato, "+
+				"or disable custom roles sync to skip legacy custom role sync and continue with base roles only, and environment roles if enabled: %w", err)
+	}
+	return err
+}
+
 // List returns all the Workato base roles and custom roles.
 func (o *roleBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
 	rv := make([]*v2.Resource, 0)
@@ -44,16 +62,10 @@ func (o *roleBuilder) List(ctx context.Context, _ *v2.ResourceId, attr rs.SyncOp
 	if !o.disableCustomRolesSync {
 		roles, nextToken, annos, err := o.client.GetRoles(ctx, attr.PageToken.Token)
 		if err != nil {
-			if code := status.Code(err); code == codes.Unauthenticated || code == codes.PermissionDenied {
-				return nil, &rs.SyncOpResults{Annotations: annos}, fmt.Errorf(
-					"baton-workato: API client is not authorized to list legacy custom roles. "+
-						"Grant the 'List non-system roles' privilege to the API client in Workato, "+
-						"or set --disable-custom-roles-sync=true to skip legacy custom role sync and continue with base roles only, and environment roles if enabled: %w", err)
-			}
-			return nil, &rs.SyncOpResults{Annotations: annos}, err
+			return nil, &rs.SyncOpResults{Annotations: annos}, wrapRolesAuthError(err)
 		}
 
-		if err = setRolesCache(ctx, attr.Session, roles); err != nil {
+		if err = setRolesCache(ctx, attr.Session, roles, true); err != nil {
 			return nil, &rs.SyncOpResults{Annotations: annos}, err
 		}
 
@@ -167,11 +179,38 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs
 		return rv, nil, nil
 	}
 
+	// healResults carries the rate-limit annotations from a self-heal re-list, if
+	// one fired, so they reach the SDK on whichever return path follows.
+	var healResults *rs.SyncOpResults
+
 	if !o.disableCustomRolesSync {
 		// privilege grants implementation
 		role := getRoleById(ctx, attr.Session, roleId)
 		if role == nil {
-			return rv, nil, uhttp.WrapErrors(codes.NotFound, fmt.Sprintf("role %s (%s) not found", resource.DisplayName, roleId))
+			// The roles cache may be empty for this sync session (e.g. a resumed
+			// sync that ran under a new sync id without re-listing roles). Populate
+			// it once and retry before treating the role as genuinely absent.
+			annos, err := ensureRolesCache(ctx, attr.Session, o.client)
+			if err != nil {
+				return nil, &rs.SyncOpResults{Annotations: annos}, err
+			}
+			if len(annos) > 0 {
+				healResults = &rs.SyncOpResults{Annotations: annos}
+			}
+			role = getRoleById(ctx, attr.Session, roleId)
+		}
+		if role == nil {
+			// Genuinely absent even after re-listing (e.g. a custom role deleted
+			// between the List and Grants phases). Skip its privilege grants for
+			// this sync rather than erroring: the empty-cache case is already
+			// handled by the self-heal above, and the platform skips a NotFound
+			// here anyway, so erroring only adds noise. The next sync recovers.
+			l := ctxzap.Extract(ctx)
+			l.Warn("baton-workato: role not found after self-heal, skipping privilege grants",
+				zap.String("role_id", roleId),
+				zap.String("role_name", resource.DisplayName),
+			)
+			return rv, healResults, nil
 		}
 
 		privileges, err := workato.FindRelatedPrivilegesErr(role.Privileges)
@@ -205,7 +244,7 @@ func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs
 		}
 	}
 
-	return rv, nil, nil
+	return rv, healResults, nil
 }
 
 func (o *roleBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) ([]*v2.Grant, annotations.Annotations, error) {

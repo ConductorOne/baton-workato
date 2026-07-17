@@ -129,9 +129,25 @@ func seed(s *State) {
 		{Id: 51, Name: "Releaser", Type: "environment", MembersCount: 0, CreatedAt: seedTime, UpdatedAt: seedTime},
 	}
 
+	// Each project owns a distinct root folder (its folder_id). The connector
+	// discovers those root folders via GET /api/projects and parents each one to
+	// its own project; it never queries the root folders through the folders
+	// endpoint. GET /api/folders is only ever called with a parent_id, so
+	// s.folders holds the *nested* folders below the project roots — never the
+	// roots themselves. Root folder ids (10, 11) therefore must not reappear
+	// here, or a nested folder would collide with a project root in the c1z
+	// store and mask one of the two hierarchies (the CXP-629 failure mode).
+	//
+	// Hierarchy:
+	//   project 100 "Billing Pipelines" -> root folder 10
+	//     folder 20 "Invoices" (parent 10)
+	//       folder 21 "Archive" (parent 20)   <- exercises multi-level nesting
+	//   project 101 "HR Pipelines" -> root folder 11
+	//     folder 22 "Payroll" (parent 11)
 	s.folders = []Folder{
-		{Id: 10, Name: "Home", ParentId: 0, CreatedAt: seedTime, UpdatedAt: seedTime},
-		{Id: 11, Name: "Shared", ParentId: 10, CreatedAt: seedTime, UpdatedAt: seedTime},
+		{Id: 20, Name: "Invoices", ParentId: 10, CreatedAt: seedTime, UpdatedAt: seedTime},
+		{Id: 21, Name: "Archive", ParentId: 20, CreatedAt: seedTime, UpdatedAt: seedTime},
+		{Id: 22, Name: "Payroll", ParentId: 11, CreatedAt: seedTime, UpdatedAt: seedTime},
 	}
 
 	s.projects = []Project{

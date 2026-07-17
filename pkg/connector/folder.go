@@ -38,19 +38,24 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 	l := ctxzap.Extract(ctx)
 	rv := make([]*v2.Resource, 0)
 
+	// At the top level (nil parent) the SDK asks for every folder in the
+	// workspace. Each Workato project owns one root folder, so we paginate
+	// projects once and emit a root folder for each, parented to its own
+	// project. Nested folders are discovered afterward because every folder
+	// carries a ChildResourceType: folder annotation, which drives the
+	// folderResourceType.Id branch below.
 	if parentResourceID == nil {
-		return nil, nil, nil
-	}
-
-	switch parentResourceID.ResourceType {
-	case projectResourceType.Id:
 		projects, nextToken, annos, err := o.client.GetProjects(ctx, attr.PageToken.Token)
 		if err != nil {
 			return nil, &rs.SyncOpResults{Annotations: annos}, err
 		}
 
 		for _, project := range projects {
-			rootFolder, err := projectFolderResource(project, parentResourceID)
+			projectParentID := &v2.ResourceId{
+				ResourceType: projectResourceType.Id,
+				Resource:     strconv.Itoa(project.Id),
+			}
+			rootFolder, err := projectFolderResource(project, projectParentID)
 			if err != nil {
 				return nil, &rs.SyncOpResults{Annotations: annos}, err
 			}
@@ -58,7 +63,9 @@ func (o *folderBuilder) List(ctx context.Context, parentResourceID *v2.ResourceI
 		}
 
 		return rv, &rs.SyncOpResults{NextPageToken: nextToken, Annotations: annos}, nil
+	}
 
+	switch parentResourceID.ResourceType {
 	case folderResourceType.Id:
 		parentId, err := strconv.Atoi(parentResourceID.Resource)
 		if err != nil {
@@ -113,6 +120,24 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, attr 
 	if err != nil {
 		return nil, nil, err
 	}
+	var healResults *rs.SyncOpResults
+	if len(folderRoles) == 0 {
+		// No mapping found. This is either a folder with no roles or an empty
+		// roles cache for this sync session (e.g. a resumed sync that skipped
+		// re-listing roles). ensureRolesCache is a no-op once the cache is
+		// populated, so this only fetches when the cache is genuinely missing.
+		annos, err := ensureRolesCache(ctx, attr.Session, o.client)
+		if err != nil {
+			return nil, &rs.SyncOpResults{Annotations: annos}, err
+		}
+		if len(annos) > 0 {
+			healResults = &rs.SyncOpResults{Annotations: annos}
+		}
+		folderRoles, err = getRoleByFolder(ctx, attr.Session, folderId)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 	for _, role := range folderRoles {
 		roleID, err := rs.NewResourceID(roleResourceType, role.Id)
 		if err != nil {
@@ -129,7 +154,7 @@ func (o *folderBuilder) Grants(ctx context.Context, resource *v2.Resource, attr 
 		)))
 	}
 
-	return rv, nil, nil
+	return rv, healResults, nil
 }
 
 func newFolderBuilder(client *client.WorkatoClient, disableCustomRolesSync bool) *folderBuilder {
