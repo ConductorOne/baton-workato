@@ -628,11 +628,8 @@ func collaboratorResource(collaborator *client.Collaborator) (*v2.Resource, erro
 	}
 
 	traits := []rs.UserTraitOption{
-		rs.WithUserProfile(profile),
-		rs.WithStatus(userStatus),
 		rs.WithEmail(collaborator.Email, true),
 		rs.WithUserLogin(collaborator.Email),
-		rs.WithCreatedAt(collaborator.CreatedAt),
 		rs.WithAccountType(v2.UserTrait_ACCOUNT_TYPE_HUMAN),
 	}
 
@@ -641,6 +638,9 @@ func collaboratorResource(collaborator *client.Collaborator) (*v2.Resource, erro
 		collaboratorResourceType,
 		collaborator.Id,
 		traits,
+		rs.WithResourceProfile(profile),
+		rs.WithResourceStatus(v2.Status_ResourceStatus(userStatus), ""),
+		rs.WithResourceCreatedAt(collaborator.CreatedAt),
 	)
 	if err != nil {
 		return nil, err

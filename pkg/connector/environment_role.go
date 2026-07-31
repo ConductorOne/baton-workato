@@ -148,12 +148,13 @@ func environmentRoleResource(role *client.EnvironmentRole, envConfig workato.Env
 		"updated_at":  role.UpdatedAt.String(),
 	}
 
-	traits := []rs.RoleTraitOption{rs.WithRoleProfile(profile)}
+	traits := []rs.RoleTraitOption{}
 
 	return rs.NewRoleResource(
 		fmt.Sprintf("%s (%s)", role.Name, targetEnv.String()),
 		environmentRoleResourceType,
 		GetRoleResourceID(id, targetEnv, envConfig),
 		traits,
+		rs.WithResourceProfile(profile),
 	)
 }

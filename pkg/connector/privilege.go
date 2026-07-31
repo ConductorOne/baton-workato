@@ -77,15 +77,14 @@ func privilegeResource(privilege *workato.CompoundPrivilege) (*v2.Resource, erro
 		"description": privilege.Privilege.Description,
 	}
 
-	traits := []rs.RoleTraitOption{
-		rs.WithRoleProfile(profile),
-	}
+	traits := []rs.RoleTraitOption{}
 
 	ret, err := rs.NewRoleResource(
 		privilege.Resource+"-"+privilege.Privilege.Id,
 		privilegeResourceType,
 		privilege.Id(),
 		traits,
+		rs.WithResourceProfile(profile),
 	)
 	if err != nil {
 		return nil, err

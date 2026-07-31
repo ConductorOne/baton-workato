@@ -174,15 +174,14 @@ func folderResource(folder *client.Folder, parentResourceId *v2.ResourceId) (*v2
 		"updated_at": folder.UpdatedAt.String(),
 	}
 
-	traits := []rs.AppTraitOption{
-		rs.WithAppProfile(profile),
-	}
+	traits := []rs.AppTraitOption{}
 
 	ret, err := rs.NewAppResource(
 		folder.Name,
 		folderResourceType,
 		folder.Id,
 		traits,
+		rs.WithResourceProfile(profile),
 		rs.WithParentResourceID(parentResourceId),
 		rs.WithAnnotation(
 			&v2.ChildResourceType{
@@ -206,15 +205,14 @@ func projectFolderResource(project *client.Project, parentResourceId *v2.Resourc
 		"parent_id": nil,
 	}
 
-	traits := []rs.AppTraitOption{
-		rs.WithAppProfile(profile),
-	}
+	traits := []rs.AppTraitOption{}
 
 	ret, err := rs.NewAppResource(
 		name,
 		folderResourceType,
 		project.FolderId,
 		traits,
+		rs.WithResourceProfile(profile),
 		rs.WithParentResourceID(parentResourceId),
 		rs.WithAnnotation(
 			&v2.ChildResourceType{
