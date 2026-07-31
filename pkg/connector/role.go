@@ -127,11 +127,7 @@ func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ r
 func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
 	rv := make([]*v2.Grant, 0)
 
-	roleTrait, err := rs.GetRoleTrait(resource)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get role trait: %w", err)
-	}
-	profile := roleTrait.GetProfile()
+	profile := resource.GetProfile()
 	if profile == nil {
 		return nil, nil, fmt.Errorf("role profile not found on resource %s", resource.Id.Resource)
 	}
@@ -258,11 +254,7 @@ func (o *roleBuilder) Grant(ctx context.Context, principal *v2.Resource, entitle
 		return nil, nil, err
 	}
 
-	roleTrait, err := rs.GetRoleTrait(entitlement.Resource)
-	if err != nil {
-		return nil, nil, fmt.Errorf("baton-workato: failed to get role trait: %w", err)
-	}
-	profile := roleTrait.GetProfile()
+	profile := entitlement.Resource.GetProfile()
 	if profile == nil {
 		return nil, nil, fmt.Errorf("baton-workato: role profile is nil on resource %s", entitlement.Resource.Id.Resource)
 	}
@@ -326,15 +318,14 @@ func roleResource(role *client.Role, envConfig workato.Environment, targetEnv wo
 		"updated_at":  role.UpdatedAt.String(),
 	}
 
-	traits := []rs.RoleTraitOption{
-		rs.WithRoleProfile(profile),
-	}
+	traits := []rs.RoleTraitOption{}
 
 	ret, err := rs.NewRoleResource(
 		fmt.Sprintf("%s (%s)", role.Name, targetEnv.String()),
 		roleResourceType,
 		GetRoleResourceID(id, targetEnv, envConfig),
 		traits,
+		rs.WithResourceProfile(profile),
 	)
 	if err != nil {
 		return nil, err
@@ -357,15 +348,14 @@ func workatoBaseRoleResource(role *workato.Role, envConfig workato.Environment, 
 		"environment": targetEnv.String(),
 	}
 
-	traits := []rs.RoleTraitOption{
-		rs.WithRoleProfile(profile),
-	}
+	traits := []rs.RoleTraitOption{}
 
 	ret, err := rs.NewRoleResource(
 		fmt.Sprintf("%s (%s)", role.RoleName, targetEnv.String()),
 		roleResourceType,
 		GetRoleResourceID(role.RoleName, targetEnv, envConfig),
 		traits,
+		rs.WithResourceProfile(profile),
 	)
 	if err != nil {
 		return nil, err

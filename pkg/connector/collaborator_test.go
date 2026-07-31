@@ -216,7 +216,7 @@ func TestBuildInviteRequest(t *testing.T) {
 			inName: "Grouped",
 			email:  "grouped@example.com",
 			profile: map[string]interface{}{
-				"env_roles":     []interface{}{"dev:Admin"},
+				"env_roles":      []interface{}{"dev:Admin"},
 				"user_group_ids": " 10 , 20 ",
 			},
 			expected: client.InviteCollaboratorRequest{

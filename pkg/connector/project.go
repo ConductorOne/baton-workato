@@ -64,15 +64,14 @@ func projectResource(project *client.Project) (*v2.Resource, error) {
 		"folder_id":   project.FolderId,
 	}
 
-	traits := []rs.AppTraitOption{
-		rs.WithAppProfile(profile),
-	}
+	traits := []rs.AppTraitOption{}
 
 	ret, err := rs.NewAppResource(
 		project.Name,
 		projectResourceType,
 		project.Id,
 		traits,
+		rs.WithResourceProfile(profile),
 	)
 	if err != nil {
 		return nil, err
