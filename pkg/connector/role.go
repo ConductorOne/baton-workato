@@ -127,7 +127,7 @@ func (o *roleBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ r
 func (o *roleBuilder) Grants(ctx context.Context, resource *v2.Resource, attr rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
 	rv := make([]*v2.Grant, 0)
 
-	profile := resource.GetProfile()
+	profile := rs.GetProfile(resource)
 	if profile == nil {
 		return nil, nil, fmt.Errorf("role profile not found on resource %s", resource.Id.Resource)
 	}
@@ -254,7 +254,7 @@ func (o *roleBuilder) Grant(ctx context.Context, principal *v2.Resource, entitle
 		return nil, nil, err
 	}
 
-	profile := entitlement.Resource.GetProfile()
+	profile := rs.GetProfile(entitlement.Resource)
 	if profile == nil {
 		return nil, nil, fmt.Errorf("baton-workato: role profile is nil on resource %s", entitlement.Resource.Id.Resource)
 	}
