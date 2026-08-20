@@ -337,7 +337,7 @@ Check that the connector data uploaded correctly. In C1, click **Apps**. On the 
 
 Workato is retiring legacy roles at the end of August 2026. Every workspace must migrate to the new RBAC v2 model (environment roles) before then. Read Workato's [Access Control v2 overview](https://docs.workato.com/en/user-accounts-and-teams/role-based-access/access-control-v2.html) and follow their [migration guide](https://docs.workato.com/en/user-accounts-and-teams/role-based-access/migrate-roles) to migrate your workspace.
 
-**Environment roles** sync requires RBAC v2 and is enabled by default, so it must be excluded from sync until your workspace migrates (otherwise sync fails with `failed to list environment roles: 401`).
+**Environment roles** sync requires RBAC v2 and is on by default, so exclude it from sync until your workspace migrates (otherwise sync fails with `failed to list environment roles: 401`).
 
 **After your workspace migrates to RBAC v2**, complete this cutover in order:
 
@@ -345,12 +345,12 @@ Workato is retiring legacy roles at the end of August 2026. Every workspace must
    - **List environment roles** — required
    - **Get environment role** — required only if C1 provisions environment role assignments
 2. In the connector configuration:
-   - Enable **Disable custom roles sync**, since custom roles are no longer served from the legacy `/api/roles` endpoint.
-   - Confirm **Environment roles** sync is enabled (it's on by default — re-enable it now if you excluded it per the note above).
+   - Enable **Disable custom roles sync**, since the legacy `/api/roles` endpoint no longer serves custom roles.
+   - Confirm **Environment roles** sync is on (it is on by default — re-enable it now if you excluded it per the note above).
 
 Getting either side of the cutover wrong fails differently:
 
 - Enable Environment roles sync too early (before migration) → sync fails with `failed to list environment roles: 401`.
-- Leave Environment roles sync disabled too late (after migration) → sync succeeds, but environment role grants are silently dropped — collaborators will appear to have no role assignments.
+- Leave Environment roles sync disabled too late (after migration) → sync succeeds, but silently drops environment role grants — collaborators appear to have no role assignments.
 
 Custom roles also move from the legacy `/api/roles` resource to environment roles, a different resource type. The first sync after migration rebuilds all role resources and grants from scratch, so expect a large diff with no retained history — this is expected, not a sync error.
