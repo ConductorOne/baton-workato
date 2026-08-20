@@ -337,7 +337,7 @@ Check that the connector data uploaded correctly. In C1, click **Apps**. On the 
 
 Workato is retiring legacy roles at the end of August 2026. Every workspace must migrate to the new RBAC v2 model (environment roles) before then. Read Workato's [Access Control v2 overview](https://docs.workato.com/en/user-accounts-and-teams/role-based-access/access-control-v2.html) and follow their [migration guide](https://docs.workato.com/en/user-accounts-and-teams/role-based-access/migrate-roles) to migrate your workspace.
 
-**Before your workspace migrates:** current releases of this connector sync all resource types by default, including **Environment roles** — so Environment roles sync is already enabled even if your workspace is still on the legacy role model. If your workspace hasn't migrated yet, exclude **Environment roles** from sync in the connector's resource type configuration. Enabling it against a legacy workspace fails sync with `failed to list environment roles: 401`, because the `/api/environment_roles` endpoint doesn't exist until after migration.
+**Environment roles** sync requires RBAC v2 and is enabled by default, so it must be excluded from sync until your workspace migrates (otherwise sync fails with `failed to list environment roles: 401`).
 
 **On the same day your workspace migrates to RBAC v2**, complete this cutover in order:
 
