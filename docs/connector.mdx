@@ -6,6 +6,28 @@ description: C1 provides identity governance and just-in-time provisioning for W
 sidebarTitle: Workato
 ---
 
+<Warning>
+**Legacy Workato roles are being retired at the end of August 2026.** Every Workato workspace must migrate to the new RBAC v2 model (environment roles) before then. Read Workato's [Access Control v2 overview](https://docs.workato.com/en/user-accounts-and-teams/role-based-access/access-control-v2.html) and follow their [migration guide](https://docs.workato.com/en/user-accounts-and-teams/role-based-access/migrate-roles) to migrate your workspace.
+
+**Before your workspace migrates:** current releases of this connector sync all resource types by default, including **Environment roles** — so Environment roles sync is already enabled even if your workspace is still on the legacy role model. If your workspace hasn't migrated yet, exclude **Environment roles** from sync in the connector's resource type configuration. Enabling it against a legacy workspace fails sync with `failed to list environment roles: 401`, because the `/api/environment_roles` endpoint doesn't exist until after migration.
+
+**On the same day your workspace migrates to RBAC v2**, complete this cutover in order:
+
+1. In Workato, update your C1 API client's role with the permissions that only become available after migration:
+   - **List environment roles** — required
+   - **Get environment role** — required only if C1 provisions environment role assignments
+2. In the connector configuration:
+   - Enable **Disable custom roles sync**, since custom roles are no longer served from the legacy `/api/roles` endpoint.
+   - Confirm **Environment roles** sync is enabled (it's on by default — re-enable it now if you excluded it per the note above).
+
+Getting either side of the cutover wrong fails differently:
+
+- Enable Environment roles sync too early (before migration) → sync fails with `failed to list environment roles: 401`.
+- Leave Environment roles sync disabled too late (after migration) → sync succeeds, but environment role grants are silently dropped — collaborators will appear to have no role assignments.
+
+Custom roles also move from the legacy `/api/roles` resource to environment roles, a different resource type. The first sync after migration rebuilds all role resources and grants from scratch, so expect a large diff with no retained history — this is expected, not a sync error.
+</Warning>
+
 ## Provision accounts
 
 When provisioning a new collaborator account, the following fields are available on the account creation form:
@@ -82,11 +104,11 @@ Select the following endpoints:
     |              | Environment roles    | Get environment role†‡      | `GET /api/environment_roles/:id`   |
     *If you don’t want to use C1 to provision role assignments, you can skip **Update collaborator’s roles** and **Get environment role**.
 
-    †**List environment roles** and **Get environment role** are only available in workspaces that use the new RBAC v2 model (environment roles). If your workspace uses the legacy role model, these permissions do not appear in the UI and you can skip them.
+    †**List environment roles** and **Get environment role** are only available after your workspace migrates to RBAC v2 — see the migration notice above for the full cutover sequence.
 
     ‡**Get environment role** is required only if you want C1 to provision environment role assignments.
 
-    §**The Collaborator roles section** (including **List non-system roles**) only appears in the UI if your workspace uses the legacy roles model. If this section is not visible, your workspace has migrated to the new RBAC v2 model and legacy custom roles are no longer accessible via the API. In that case, migrate your legacy custom roles to environment roles using the [Role migration API](https://docs.workato.com/workato-api/role-migration.html), or enable **Disable custom roles sync** to skip legacy custom role sync.
+    §**The Collaborator roles section** (including **List non-system roles**) only appears in the UI if your workspace uses the legacy roles model. If this section is not visible, your workspace has migrated to RBAC v2 — see the migration notice above, and use Workato's [Role migration API](https://docs.workato.com/workato-api/role-migration.html) to migrate your legacy custom roles to environment roles.
 </Step>
 <Step>
 Save the new role.  
