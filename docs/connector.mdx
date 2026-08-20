@@ -339,7 +339,7 @@ Workato is retiring legacy roles at the end of August 2026. Every workspace must
 
 **Environment roles** sync requires RBAC v2 and is enabled by default, so it must be excluded from sync until your workspace migrates (otherwise sync fails with `failed to list environment roles: 401`).
 
-**On the same day your workspace migrates to RBAC v2**, complete this cutover in order:
+**After your workspace migrates to RBAC v2**, complete this cutover in order:
 
 1. In Workato, update your C1 API client's role with the permissions that only become available after migration:
    - **List environment roles** — required
