@@ -143,7 +143,9 @@
       "name": "disable-custom-roles-sync",
       "displayName": "Disable custom roles sync",
       "description": "Whether to disable custom roles sync or not",
-      "boolField": {}
+      "boolField": {
+        "defaultValue": true
+      }
     }
   ],
   "displayName": "Workato",
