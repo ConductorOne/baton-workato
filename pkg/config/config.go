@@ -43,7 +43,7 @@ var (
 		"disable-custom-roles-sync",
 		field.WithDisplayName("Disable custom roles sync"),
 		field.WithDescription("Whether to disable custom roles sync or not"),
-		field.WithDefaultValue(false),
+		field.WithDefaultValue(true),
 	)
 
 	// ConfigurationFields defines the external configuration required for the

@@ -26,9 +26,9 @@ You must be an Admin or have a role with access to API Clients.
 |              | Collaborators        | Get collaborator privileges | `GET /api/members/:id/privileges`  |
 |              | Collaborator roles   | List non-system roles       | `GET /api/roles`                   |
 
-> **Note:** The **Collaborator roles** section (including "List non-system roles") only appears in the API client permissions UI if your workspace still uses the legacy roles model. If this section is not visible, your workspace has migrated to the new RBAC v2 model (Environment roles + Project roles). In that case, legacy custom roles are not accessible via the API and you should either:
-> - Migrate your legacy custom roles to the new model using the [Role migration API](https://docs.workato.com/workato-api/role-migration.html), or
-> - Set `--disable-custom-roles-sync=true` to skip legacy custom role sync and continue with base and environment roles only.
+> **Note:** The **Collaborator roles** section (including "List non-system roles") only appears in the API client permissions UI if your workspace still uses the legacy roles model. If this section is not visible, your workspace has migrated to the new RBAC v2 model (Environment roles + Project roles). In that case, legacy custom roles are not accessible via the API — and legacy custom role sync is already skipped by default (`--disable-custom-roles-sync` defaults to `true`), so no action is needed.
+>
+> If your workspace is still on the legacy roles model and you want C1 to keep syncing legacy custom roles, set `--disable-custom-roles-sync=false` (or `BATON_DISABLE_CUSTOM_ROLES_SYNC=false`). Otherwise, migrate your legacy custom roles to the new model using the [Role migration API](https://docs.workato.com/workato-api/role-migration.html).
 
 ### Using Workato commercial platform:
 
@@ -107,7 +107,7 @@ Available Commands:
 Flags:
       --client-id string             The client ID used to authenticate with ConductorOne ($BATON_CLIENT_ID)
       --client-secret string         The client secret used to authenticate with ConductorOne ($BATON_CLIENT_SECRET)
-      --disable-custom-roles-sync    Disable custom roles sync ($BATON_DISABLE_CUSTOM_ROLES_SYNC)
+      --disable-custom-roles-sync    Disable custom roles sync ($BATON_DISABLE_CUSTOM_ROLES_SYNC) (default true)
   -f, --file string                  The path to the c1z file to sync with ($BATON_FILE) (default "sync.c1z")
   -h, --help                         help for baton-workato
       --log-format string            The output format for logs: json, console ($BATON_LOG_FORMAT) (default "json")
