@@ -12,8 +12,9 @@ import (
 //
 // Transcribed from the vendor base-URL table as audited for CXH-2003
 // (fetched 2026-07-06); verified live 2026-11-02, which additionally documents
-// UK (https://app.uk.workato.com/api/) and an Enterprise US host change — both
-// deliberately out of this PR's scope; UK is tracked as a follow-up.
+// UK (https://app.uk.workato.com/api/) and an Enterprise US host change —
+// both deliberately out of this PR's scope: the CXH-2003 request is frozen to
+// KR+CN per the vendor table as filed. Adding UK would need its own request.
 //
 // This table is intentionally hardcoded (not derived from WorkatoDataCenters)
 // so the select options and the URL map stay in lockstep with the vendor doc.
