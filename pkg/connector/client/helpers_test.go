@@ -7,14 +7,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// documentedDataCenters is transcribed from the vendor documentation:
+// documentedDataCenters is a dated transcription of the vendor base-URL table:
 // https://docs.workato.com/workato-api.html#base-url
+//
+// Transcribed from the vendor base-URL table as audited for CXH-2003
+// (fetched 2026-07-06); verified live 2026-11-02, which additionally documents
+// UK (https://app.uk.workato.com/api/) and an Enterprise US host change — both
+// deliberately out of this PR's scope; UK is tracked as a follow-up.
 //
 // This table is intentionally hardcoded (not derived from WorkatoDataCenters)
 // so the select options and the URL map stay in lockstep with the vendor doc.
-// Adding a tenth region to WorkatoDataCenters requires adding a row here,
+// Adding a region to WorkatoDataCenters requires adding a row here,
 // which forces a doc check at review time.
 var documentedDataCenters = map[string]string{
+	// us: kept at www.workato.com — the connector's live default, which still
+	// serves the API. The vendor docs (live 2026-11-02) now list
+	// https://app.workato.com/api/ under "Workato Enterprise customers";
+	// migrating the default host is a deliberate behavior change, out of scope
+	// for this PR and not part of this transcription.
 	"us":      "https://www.workato.com",
 	"eu":      "https://app.eu.workato.com",
 	"jp":      "https://app.jp.workato.com",
@@ -27,7 +37,8 @@ var documentedDataCenters = map[string]string{
 }
 
 func TestWorkatoDataCenters(t *testing.T) {
-	require.Len(t, WorkatoDataCenters, 9, "WorkatoDataCenters must have exactly the nine documented regions")
+	require.Len(t, WorkatoDataCenters, len(documentedDataCenters),
+		"WorkatoDataCenters must have exactly the regions documented in documentedDataCenters")
 
 	for region, want := range documentedDataCenters {
 		t.Run(region, func(t *testing.T) {

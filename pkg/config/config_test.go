@@ -94,14 +94,59 @@ func TestDataCenterDefault(t *testing.T) {
 // future select option without a map entry would pass validation and resolve to
 // an empty base URL at the direct index in pkg/connector/connector.go.
 //
-// The options list is read from the committed, CI-freshness-enforced
-// config_schema.json (regenerated from the binary by
-// capabilities_and_config.yaml), because field.FieldRule does not expose the
-// select's in-list outside the baton-sdk field package.
+// The in-list is derived hermetically from the in-memory marshal of the
+// connector's declared field.Configuration (json.Marshal(&Config) →
+// Configuration.MarshalJSON → protojson, the same shape the CLI writes to
+// config_schema.json), so a config.go-only option addition is caught at PR
+// time — not only post-merge when the regen bot commits a fresh schema.
+// A second assertion keeps the committed config_schema.json pinned to that
+// in-memory list, so post-merge file freshness stays enforced too.
 func TestDataCenterSelectURLLockstep(t *testing.T) {
-	schemaBytes, err := os.ReadFile(filepath.Join("..", "..", "config_schema.json"))
-	require.NoError(t, err, "committed config_schema.json must be readable from the test")
+	inList := parseDataCenterInList(t, jsonMarshalConfigSchema(t))
 
+	// Direction 1: every select option must have a URL map entry.
+	for _, opt := range inList {
+		u, ok := client.WorkatoDataCenters[opt]
+		require.True(t, ok, "select option %q has no WorkatoDataCenters entry; it would resolve to an empty base URL", opt)
+		require.NotEmpty(t, u, "WorkatoDataCenters[%q] must not be empty", opt)
+	}
+
+	// Direction 2: every URL map key must be an accepted select option.
+	accepted := make(map[string]struct{}, len(inList))
+	for _, opt := range inList {
+		accepted[opt] = struct{}{}
+	}
+	for region := range client.WorkatoDataCenters {
+		require.Contains(t, accepted, region, "WorkatoDataCenters key %q is not an accepted select option", region)
+	}
+
+	// Freshness pin: the committed config_schema.json must equal the in-memory
+	// marshal, so the file never drifts from the declared configuration.
+	committed := parseDataCenterInList(t, readCommittedSchema(t))
+	require.Equal(t, inList, committed,
+		"committed config_schema.json is stale: its workato-data-center in-list differs from the in-memory field.Configuration marshal")
+}
+
+// jsonMarshalConfigSchema marshals the in-memory configuration the same way the
+// CLI does when writing config_schema.json.
+func jsonMarshalConfigSchema(t *testing.T) []byte {
+	t.Helper()
+	b, err := json.Marshal(&Config)
+	require.NoError(t, err)
+	return b
+}
+
+func readCommittedSchema(t *testing.T) []byte {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("..", "..", "config_schema.json"))
+	require.NoError(t, err, "committed config_schema.json must be readable from the test")
+	return b
+}
+
+// parseDataCenterInList extracts the workato-data-center select in-list from a
+// marshaled config-schema document.
+func parseDataCenterInList(t *testing.T, schemaBytes []byte) []string {
+	t.Helper()
 	var schema struct {
 		Fields []struct {
 			Name        string `json:"name"`
@@ -121,21 +166,6 @@ func TestDataCenterSelectURLLockstep(t *testing.T) {
 			break
 		}
 	}
-	require.NotEmpty(t, selectOptions, "workato-data-center property with stringField.rules.in not found in config_schema.json")
-
-	// Direction 1: every select option must have a URL map entry.
-	for _, opt := range selectOptions {
-		u, ok := client.WorkatoDataCenters[opt]
-		require.True(t, ok, "select option %q has no WorkatoDataCenters entry; it would resolve to an empty base URL", opt)
-		require.NotEmpty(t, u, "WorkatoDataCenters[%q] must not be empty", opt)
-	}
-
-	// Direction 2: every URL map key must be an accepted select option.
-	accepted := make(map[string]struct{}, len(selectOptions))
-	for _, opt := range selectOptions {
-		accepted[opt] = struct{}{}
-	}
-	for region := range client.WorkatoDataCenters {
-		require.Contains(t, accepted, region, "WorkatoDataCenters key %q is not an accepted select option", region)
-	}
+	require.NotEmpty(t, selectOptions, "workato-data-center property with stringField.rules.in not found")
+	return selectOptions
 }
