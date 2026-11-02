@@ -16,7 +16,45 @@ func TestConfigs(t *testing.T) {
 	)
 
 	testCases := []test.TestCase{
-		// Add test cases here.
+		{
+			Configs: map[string]string{
+				"workato-api-key":     "key",
+				"workato-data-center": "kr",
+			},
+			IsValid: true,
+			Message: "kr data center is valid",
+		},
+		{
+			Configs: map[string]string{
+				"workato-api-key":     "key",
+				"workato-data-center": "cn",
+			},
+			IsValid: true,
+			Message: "cn data center is valid",
+		},
+		{
+			Configs: map[string]string{
+				"workato-api-key":     "key",
+				"workato-data-center": "us",
+			},
+			IsValid: true,
+			Message: "us data center is valid",
+		},
+		{
+			Configs: map[string]string{
+				"workato-api-key":     "key",
+				"workato-data-center": "xx",
+			},
+			IsValid: false,
+			Message: "unknown data center is rejected",
+		},
+		{
+			Configs: map[string]string{
+				"workato-data-center": "us",
+			},
+			IsValid: false,
+			Message: "missing workato-api-key is rejected",
+		},
 	}
 
 	validateConfig := func(v *viper.Viper) error {
@@ -35,4 +73,14 @@ func TestDisableCustomRolesSyncDefault(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, defaultValue)
 	require.True(t, *defaultValue, "disable-custom-roles-sync should default to true")
+}
+
+// TestDataCenterDefault pins the resolved default for workato-data-center so
+// an accidental change to the default data center fails CI instead of
+// silently redirecting installs to a different Workato deployment.
+func TestDataCenterDefault(t *testing.T) {
+	defaultValue, err := field.GetDefaultValue[string](WorkatoDataCenterFiekd)
+	require.NoError(t, err)
+	require.NotNil(t, defaultValue)
+	require.Equal(t, "us", *defaultValue, "workato-data-center should default to us")
 }
