@@ -107,7 +107,7 @@
     {
       "name": "workato-data-center",
       "displayName": "Data center",
-      "description": "Your workato data center (us, eu, jp, sg, au, il, sandbox). See more on https://docs.workato.com/workato-api.html#base-url",
+      "description": "Your workato data center (us, eu, jp, sg, au, il, sandbox, kr, cn). See more on https://docs.workato.com/workato-api.html#base-url",
       "stringField": {
         "defaultValue": "us",
         "rules": {
@@ -118,7 +118,9 @@
             "sg",
             "au",
             "il",
-            "sandbox"
+            "sandbox",
+            "kr",
+            "cn"
           ]
         }
       }

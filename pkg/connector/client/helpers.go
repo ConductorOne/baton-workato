@@ -33,6 +33,8 @@ var (
 		"au":      "https://app.au.workato.com",
 		"il":      "https://app.il.workato.com",
 		"sandbox": "https://app.trial.workato.com",
+		"kr":      "https://app.kr.workato.com",
+		"cn":      "https://app.workatoapp.cn",
 	}
 )
 
