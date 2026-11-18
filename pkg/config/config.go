@@ -15,9 +15,9 @@ var (
 
 	WorkatoDataCenterFiekd = field.SelectField(
 		"workato-data-center",
-		[]string{"us", "eu", "jp", "sg", "au", "il", "sandbox"},
+		[]string{"us", "eu", "jp", "sg", "au", "il", "sandbox", "kr", "cn"},
 		field.WithDisplayName("Data center"),
-		field.WithDescription("Your workato data center (us, eu, jp, sg, au, il, sandbox). See more on https://docs.workato.com/workato-api.html#base-url"),
+		field.WithDescription("Your workato data center (us, eu, jp, sg, au, il, sandbox, kr, cn). See more on https://docs.workato.com/workato-api.html#base-url"),
 		field.WithDefaultValue("us"),
 	)
 

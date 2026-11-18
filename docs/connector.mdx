@@ -182,7 +182,7 @@ Find the **Settings** area of the page and click **Edit**.
 Enter the API token in the **API key** field. 
 </Step>
 <Step>
-In the **Data center** field, enter one of `us`, `eu`, `jp`, `sg`, `au`, `il`, or `sandbox` (developer sandbox) to identify the location of your Workato data center. The default is `us`. 
+In the **Data center** field, enter one of `us`, `eu`, `jp`, `sg`, `au`, `il`, `sandbox` (developer sandbox), `kr`, or `cn` to identify the location of your Workato data center. The default is `us`. Note that `cn` is Workato's separately-domained China deployment (`app.workatoapp.cn`); its Developer API surface could not be live-verified without vendor credentials. 
 </Step>
 <Step>
 In the **Environment** field, enter one of `dev`, `test`, or `prod` to identify your Workato environment. The default is `dev`. 
@@ -265,7 +265,7 @@ stringData:
   
   # Workato credentials
   BATON_WORKATO_API_KEY: <Workato API key>
-  BATON_WORKATO_DATA_CENTER: <Your Workato data center (one of us, eu, jp, sg, au, il, or sandbox). Default is us.>
+  BATON_WORKATO_DATA_CENTER: <Your Workato data center (one of us, eu, jp, sg, au, il, sandbox, kr, or cn). Default is us.>
   BATON_WORKATO_ENV: <Your Workato environment (one of dev, test, or prod). Default is 'dev'>
 
   # Defaults to true (legacy custom role sync is skipped by default, since legacy

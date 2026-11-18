@@ -117,7 +117,7 @@ Flags:
       --ticketing                    This must be set to enable ticketing support ($BATON_TICKETING)
   -v, --version                      version for baton-workato
       --workato-api-key string       required: Your workato API key ($BATON_WORKATO_API_KEY)
-      --workato-data-center string   Your workato data center (us, eu, jp, sg, au) default is 'us' see more on https://docs.workato.com/workato-api.html#base-url ($BATON_WORKATO_DATA_CENTER) (default "us")
+      --workato-data-center string   Your workato data center (us, eu, jp, sg, au, il, sandbox, kr, cn). See more on https://docs.workato.com/workato-api.html#base-url ($BATON_WORKATO_DATA_CENTER) (default "us")
       --workato-env string           Your workato environment (dev, test, prod, all) default is 'dev' ($BATON_WORKATO_ENV) (default "dev")
 
 Use "baton-workato [command] --help" for more information about a command.
